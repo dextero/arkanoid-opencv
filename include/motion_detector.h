@@ -20,19 +20,83 @@ namespace {
     }
 }
 
+struct PercentPoint: public cv::Point2f {
+    PercentPoint():
+        cv::Point2f(0, 0)
+    {
+    }
+
+    PercentPoint(float x, float y):
+            cv::Point2f(x, y)
+    {
+        assert(0 <= x && x <= 1
+            && 0 <= y && y <= 1);
+    }
+
+    PercentPoint(const cv::Point2f& point,
+                 const cv::Point2f& scale):
+        cv::Point2f(point.x * scale.x,
+                    point.y * scale.y)
+    {
+    }
+
+    PercentPoint operator +(const PercentPoint& rhs) {
+        return { x + rhs.x, y + rhs.y };
+    }
+    PercentPoint& operator +=(const PercentPoint& rhs) {
+        x += rhs.x;
+        y += rhs.y;
+        return *this;
+    }
+
+    PercentPoint operator -(const PercentPoint& rhs) {
+        return { x - rhs.x, y - rhs.y };
+    }
+    PercentPoint& operator -=(const PercentPoint& rhs) {
+        x -= rhs.x;
+        y -= rhs.y;
+        return *this;
+    }
+
+    PercentPoint operator *(float rhs) {
+        return { x * rhs, y * rhs };
+    }
+    PercentPoint& operator *=(float rhs) {
+        x *= rhs;
+        y *= rhs;
+        return *this;
+    }
+
+    PercentPoint operator /(float rhs) {
+        return { x / rhs, y / rhs };
+    }
+    PercentPoint& operator /=(float rhs) {
+        x /= rhs;
+        y /= rhs;
+        return *this;
+    }
+};
+
 class Marker
 {
 public:
-    void nextPosition(const cv::Point2f pos) {
+    void nextPosition(const cv::Point2f& pos,
+                      const cv::Point2i& image_size) {
+        nextPosition({ pos.x / image_size.x,
+                       pos.y / image_size.y });
+    }
+
+    void nextPosition(const PercentPoint& pos) {
         _pos = pos;
     }
 
-    const cv::Point2f& getPosition() const {
-        return _pos;
+    cv::Point2f getPosition(const cv::Point2i& image_size) const {
+        return { _pos.x * image_size.x,
+                 _pos.y * image_size.y };
     }
 
 private:
-    cv::Point2f _pos;
+    PercentPoint _pos;
 };
 
 class MotionDetector {
@@ -64,13 +128,13 @@ public:
 
             cv::Point2f center;
             if (tryGetCenterPoint(_contours, center)) {
-                _marker.nextPosition(center);
+                _marker.nextPosition(center, preprocessed.size());
             }
         }
     }
 
     Image toImage(const Image &background) const {
-        Image ret(height, width, CV_8UC3);
+        Image ret = Image::zeros(height, width, CV_8UC3);
 
         if (settings.show_background) {
             Image scaled_bg(ret.size(), background.type());
@@ -176,10 +240,17 @@ private:
         circle_centers.reserve(_contours.size());
         circle_radii.reserve(_contours.size());
 
+        cv::Point2f scale((float)width / _curr_frame.cols,
+                          (float)height / _curr_frame.rows);
         for( size_t i = 0; i < _contours.size(); i++ )
         {
             std::vector<cv::Point> poly;
             cv::approxPolyDP(cv::Mat(_contours[i]), poly, 3, true);
+
+            for (cv::Point& p: poly) {
+                p.x *= scale.x;
+                p.y *= scale.y;
+            }
             cv::Mat poly_mat(poly);
 
             cv::Rect bb = cv::boundingRect(poly_mat);
@@ -209,7 +280,8 @@ private:
 //                       color, 2, 8, 0);
         }
 
-        cv::circle(out_image, _marker.getPosition(), 20, cv::Scalar(255, 255, 255), 2, 8, 0 );
+        cv::circle(out_image, _marker.getPosition(out_image.size()),
+                   20, cv::Scalar(255, 255, 255), 2, 8, 0 );
     }
 
     Image amplifyMotion(const Image& prev_frame,
