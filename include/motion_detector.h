@@ -30,7 +30,7 @@ public:
     {
         _kalman.statePre = cv::Mat::zeros(2, 1, CV_32F);
         cv::setIdentity(_kalman.measurementMatrix);
-        cv::setIdentity(_kalman.processNoiseCov, cv::Scalar::all(1e-4));
+        cv::setIdentity(_kalman.processNoiseCov, cv::Scalar::all(1e-1));
         cv::setIdentity(_kalman.measurementNoiseCov, cv::Scalar::all(1));
         cv::setIdentity(_kalman.errorCovPost, cv::Scalar::all(.5));
     }
