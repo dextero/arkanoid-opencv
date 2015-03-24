@@ -20,5 +20,5 @@ set(SOURCE_FILES
 
 include_directories(include)
 
-add_executable(pong ${SOURCE_FILES} include/utils/message_queue.h include/utils/spin_lock.h include/image.h include/bounded_value.h include/motion_detector.h include/window.h)
+add_executable(pong ${SOURCE_FILES} include/utils/message_queue.h include/utils/spin_lock.h include/image.h include/bounded_value.h include/motion_detector.h include/window.h include/percent_point.h)
 target_link_libraries(pong ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT})

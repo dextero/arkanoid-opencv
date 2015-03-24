@@ -105,12 +105,17 @@ int main() {
 
         std::map<char, std::function<void(void)>> key_handlers;
         add_setting_adjuster(key_handlers, settings.motion_threshold, '1', 'q', (unsigned char)5);
-        add_setting_adjuster(key_handlers, settings.min_bb_size,      '2', 'w', 2);
+        add_setting_adjuster(key_handlers, settings.min_poly_area,    '2', 'w', 5);
         key_handlers[' '] = [&settings](){ settings.show_background = !settings.show_background; };
         key_handlers['0'] = [&settings](){ settings.show_debug_contours = !settings.show_debug_contours; };
         key_handlers['c'] = [](){ Logger::toggle("capture"); };
         key_handlers['f'] = [](){ Logger::toggle("fps"); };
         key_handlers['t'] = [](){ Logger::toggle("threads"); };
+        key_handlers['k'] = [](){ Logger::toggle("kalman"); };
+        key_handlers['m'] = [](){ Logger::toggle("marker"); };
+
+        Logger::disable("capture");
+        Logger::disable("kalman");
 
         while (!force_stop && key != 27) {
             auto fpsGuard = fpsCounter.startNextFrame();

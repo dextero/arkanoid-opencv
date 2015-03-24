@@ -27,6 +27,8 @@ public:
 
     static Logger& get(const std::string& name);
     static void toggle(const std::string& name);
+    static void enable(const std::string& name);
+    static void disable(const std::string& name);
 
     virtual void  printf(const char* /*msg*/, ...) {}
     virtual void   trace(const char* /*msg*/, ...) {}

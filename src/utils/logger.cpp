@@ -109,3 +109,11 @@ void Logger::toggle(const std::string& name) {
         _disabled_loggers.erase(it);
     }
 }
+
+void Logger::enable(const std::string& name) {
+    _disabled_loggers.erase(name);
+}
+
+void Logger::disable(const std::string& name) {
+    _disabled_loggers.insert(name);
+}

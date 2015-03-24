@@ -6,9 +6,11 @@
 #define _PONG_MOTION_DETECTOR_H_
 
 #include <opencv2/opencv.hpp>
+#include <utils/logger.h>
 
 #include "image.h"
 #include "bounded_value.h"
+#include "percent_point.h"
 
 namespace {
     cv::RNG rng(1);
@@ -20,66 +22,19 @@ namespace {
     }
 }
 
-struct PercentPoint: public cv::Point2f {
-    PercentPoint():
-        cv::Point2f(0, 0)
-    {
-    }
-
-    PercentPoint(float x, float y):
-            cv::Point2f(x, y)
-    {
-        assert(0 <= x && x <= 1
-            && 0 <= y && y <= 1);
-    }
-
-    PercentPoint(const cv::Point2f& point,
-                 const cv::Point2f& scale):
-        cv::Point2f(point.x * scale.x,
-                    point.y * scale.y)
-    {
-    }
-
-    PercentPoint operator +(const PercentPoint& rhs) {
-        return { x + rhs.x, y + rhs.y };
-    }
-    PercentPoint& operator +=(const PercentPoint& rhs) {
-        x += rhs.x;
-        y += rhs.y;
-        return *this;
-    }
-
-    PercentPoint operator -(const PercentPoint& rhs) {
-        return { x - rhs.x, y - rhs.y };
-    }
-    PercentPoint& operator -=(const PercentPoint& rhs) {
-        x -= rhs.x;
-        y -= rhs.y;
-        return *this;
-    }
-
-    PercentPoint operator *(float rhs) {
-        return { x * rhs, y * rhs };
-    }
-    PercentPoint& operator *=(float rhs) {
-        x *= rhs;
-        y *= rhs;
-        return *this;
-    }
-
-    PercentPoint operator /(float rhs) {
-        return { x / rhs, y / rhs };
-    }
-    PercentPoint& operator /=(float rhs) {
-        x /= rhs;
-        y /= rhs;
-        return *this;
-    }
-};
-
 class Marker
 {
 public:
+    Marker():
+        _kalman(4, 2, 0)
+    {
+        _kalman.statePre = cv::Mat::zeros(2, 1, CV_32F);
+        cv::setIdentity(_kalman.measurementMatrix);
+        cv::setIdentity(_kalman.processNoiseCov, cv::Scalar::all(1e-4));
+        cv::setIdentity(_kalman.measurementNoiseCov, cv::Scalar::all(1));
+        cv::setIdentity(_kalman.errorCovPost, cv::Scalar::all(.5));
+    }
+
     void nextPosition(const cv::Point2f& pos,
                       const cv::Point2i& image_size) {
         nextPosition({ pos.x / image_size.x,
@@ -87,16 +42,34 @@ public:
     }
 
     void nextPosition(const PercentPoint& pos) {
-        _pos = pos;
+        Logger::get("marker").debug("pos: %f %f", pos.x, pos.y);
+        _last_position = pos;
+        update();
     }
 
-    cv::Point2f getPosition(const cv::Point2i& image_size) const {
-        return { _pos.x * image_size.x,
-                 _pos.y * image_size.y };
+    void update() {
+        _kalman.correct(cv::Mat(_last_position));
+    }
+
+    cv::Point2f getSmoothedPosition(const cv::Point2i& image_size) const {
+        const cv::Mat& prediction = _kalman.predict(cv::Mat());
+
+        Logger::get("kalman").debug("kalman: %f %f",
+                                    prediction.at<float>(0),
+                                    prediction.at<float>(1));
+
+        return { prediction.at<float>(0) * image_size.x,
+                 prediction.at<float>(1) * image_size.y };
+    }
+
+    cv::Point2f getLastPosition(const cv::Point2i& image_size) const {
+        return { _last_position.x * image_size.x,
+                 _last_position.y * image_size.y };
     }
 
 private:
-    PercentPoint _pos;
+    cv::Point2f _last_position;
+    mutable cv::KalmanFilter _kalman;
 };
 
 class MotionDetector {
@@ -110,6 +83,26 @@ public:
 
     std::vector<std::vector<cv::Point>> _contours;
 
+    std::vector<std::vector<cv::Point>> getSignificantContours(const Image& greyscale_image) const {
+        std::vector<std::vector<cv::Point>> significant_contours;
+
+        std::vector<std::vector<cv::Point>> contours;
+        std::vector<cv::Vec4i> hierarchy;
+        cv::findContours(greyscale_image, contours, hierarchy,
+                         cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE,
+                         cv::Point(0, 0));
+
+        for (auto& contour: contours) {
+            cv::Mat contour_mat(contour);
+
+            if (fabs(cv::contourArea(contour_mat, false)) >= settings.min_poly_area) {
+                significant_contours.emplace_back(contour);
+            }
+        }
+
+        return significant_contours;
+    }
+
     void nextFrame(const Image &frame) {
         _prev_frame = std::move(_curr_frame);
         _curr_frame = preprocessFrame(frame);
@@ -121,14 +114,13 @@ public:
             //            cv::equalizeHist(diff, diff);
             //            cv::blur(diff, preprocessed, cv::Size(7, 7), cv::Point(0, 0), cv::BORDER_DEFAULT);
 
-            std::vector<cv::Vec4i> hierarchy;
-            cv::findContours(preprocessed.toGreyscale(), _contours, hierarchy,
-                             cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE,
-                             cv::Point(0, 0));
+            _contours = getSignificantContours(preprocessed.toGreyscale());
 
             cv::Point2f center;
             if (tryGetCenterPoint(_contours, center)) {
                 _marker.nextPosition(center, preprocessed.size());
+            } else {
+                _marker.update();
             }
         }
     }
@@ -152,7 +144,7 @@ public:
 
     struct Settings {
         BoundedValue<uint8_t, 0, 255> motion_threshold = 250;
-        BoundedValue<int, 0, 200> min_bb_size = 25;
+        BoundedValue<int, 0, 1000> min_poly_area = 300;
         bool show_background = true;
         bool show_debug_contours = true;
 
@@ -163,7 +155,7 @@ public:
 #define DRAW_SETTING(Name) \
     drawTextLine(textImage, line_num++, #Name " = " + std::to_string(Name))
             DRAW_SETTING(motion_threshold);
-            DRAW_SETTING(min_bb_size);
+            DRAW_SETTING(min_poly_area);
             DRAW_SETTING(show_background);
             DRAW_SETTING(show_debug_contours);
 #undef DRAW_SETTING
@@ -207,7 +199,7 @@ private:
 
     static bool tryGetCenterPoint(const std::vector<std::vector<cv::Point>>& contours,
                                   cv::Point2f& out_point) {
-        if (contours.size() < 3) {
+        if (contours.size() < 1) {
             return false;
         }
 
@@ -216,8 +208,9 @@ private:
 
         size_t num_points = 0;
         for (const auto& poly: contours) {
-            for (const cv::Point2f& point: poly) {
-                out_point += point;
+            for (const cv::Point& p: poly) {
+                out_point.x += p.x;
+                out_point.y += p.y;
             }
 
             num_points += poly.size();
@@ -242,22 +235,17 @@ private:
 
         cv::Point2f scale((float)width / _curr_frame.cols,
                           (float)height / _curr_frame.rows);
-        for( size_t i = 0; i < _contours.size(); i++ )
-        {
+        for (const auto& contour: _contours) {
             std::vector<cv::Point> poly;
-            cv::approxPolyDP(cv::Mat(_contours[i]), poly, 3, true);
+            cv::approxPolyDP(cv::Mat(contour), poly, 3, true);
 
             for (cv::Point& p: poly) {
                 p.x *= scale.x;
                 p.y *= scale.y;
             }
-            cv::Mat poly_mat(poly);
 
+            cv::Mat poly_mat(poly);
             cv::Rect bb = cv::boundingRect(poly_mat);
-            if (bb.width < settings.min_bb_size
-                    || bb.height < settings.min_bb_size) {
-                continue;
-            }
 
             cv::Point2f center;
             float radius;
@@ -280,8 +268,10 @@ private:
 //                       color, 2, 8, 0);
         }
 
-        cv::circle(out_image, _marker.getPosition(out_image.size()),
+        cv::circle(out_image, _marker.getSmoothedPosition(out_image.size()),
                    20, cv::Scalar(255, 255, 255), 2, 8, 0 );
+        cv::circle(out_image, _marker.getLastPosition(out_image.size()),
+                   20, cv::Scalar(0, 0, 255), 2, 8, 0 );
     }
 
     Image amplifyMotion(const Image& prev_frame,
