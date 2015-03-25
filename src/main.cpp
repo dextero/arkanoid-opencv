@@ -94,7 +94,7 @@ int main() {
 
     Window window("pong");
     FpsCounter fpsCounter;
-    MotionDetector detector(1920, 1080);
+    MotionDetector detector(800, 600);
 
     CaptureThread capture;
 
@@ -113,9 +113,11 @@ int main() {
         key_handlers['t'] = [](){ Logger::toggle("threads"); };
         key_handlers['k'] = [](){ Logger::toggle("kalman"); };
         key_handlers['m'] = [](){ Logger::toggle("marker"); };
+        key_handlers['a'] = [&detector] { detector.toggleCalibration(); };
 
         Logger::disable("capture");
         Logger::disable("kalman");
+        Logger::disable("fps");
 
         while (!force_stop && key != 27) {
             auto fpsGuard = fpsCounter.startNextFrame();
