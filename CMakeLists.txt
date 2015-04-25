@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 2.8)
 project(pong)
 
 find_package(OpenCV REQUIRED)
@@ -21,5 +21,5 @@ set(SOURCE_FILES
 
 include_directories(include)
 
-add_executable(pong ${SOURCE_FILES} include/utils/message_queue.h include/utils/spin_lock.h include/image.h include/bounded_value.h include/motion_detector.h include/window.h include/percent_point.h)
+add_executable(pong ${SOURCE_FILES} include/utils/message_queue.h include/utils/spin_lock.h include/image.h include/bounded_value.h include/motion_detector.h include/window.h include/percent_point.h include/tetris/board.h)
 target_link_libraries(pong ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT})

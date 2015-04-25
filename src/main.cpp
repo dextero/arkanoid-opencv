@@ -8,6 +8,7 @@
 #include <atomic>
 
 #include <signal.h>
+#include <tetris/board.h>
 
 #include "motion_detector.h"
 #include "window.h"
@@ -110,6 +111,7 @@ int main() {
     MotionDetector detector(800, 600);
 
     CaptureThread capture;
+    tetris::Board tetris_board(10, 20);
 
     try {
         char key = 0;
@@ -143,7 +145,9 @@ int main() {
                 detector.nextFrame(background);
             }
 
-            window.showImage(detector.toImage(background));
+            Image frame = detector.toImage(background);
+            tetris_board.drawOnto(frame);
+            window.showImage(frame);
 
             key = (char) cvWaitKey(20);
             auto it = key_handlers.find(key);
