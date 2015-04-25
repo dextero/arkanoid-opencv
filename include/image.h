@@ -11,33 +11,56 @@ class Image: public cv::Mat
 {
 public:
     template<typename... T>
-    Image(T&&... args):
-        cv::Mat(args...)
-    {}
+    Image(T &&... args):
+            cv::Mat(args...)
+    { }
 
-    enum class FlipAxis {
+    static Image fromChannels(const Image& b,
+                              const Image& g,
+                              const Image& r)
+    {
+        assert(r.size == g.size);
+        assert(r.size == b.size);
+        assert(r.type() == CV_8UC1);
+        assert(g.type() == CV_8UC1);
+        assert(b.type() == CV_8UC1);
+
+        Image rgb(r.size(), CV_8UC3);
+        cv::insertChannel(r, rgb, 2);
+        cv::insertChannel(g, rgb, 1);
+        cv::insertChannel(b, rgb, 0);
+
+        return rgb;
+    }
+
+    enum class FlipAxis
+    {
         Both = -1,
         X = 0,
         Y = 1,
     };
 
-    Image flipped(FlipAxis axis) const {
+    Image flipped(FlipAxis axis) const
+    {
         Image ret(size(), type());
-        cv::flip(*this, ret, (int)axis);
+        cv::flip(*this, ret, (int) axis);
         return ret;
     }
 
-    Image& flip(FlipAxis axis) {
+    Image &flip(FlipAxis axis)
+    {
         return *this = std::move(flipped(axis));
     }
 
-    Image absdiff(const Image& other) const {
+    Image absdiff(const Image &other) const
+    {
         Image diff(size(), type());
         cv::absdiff(*this, other, diff);
         return diff;
     }
 
-    Image toGreyscale() const {
+    Image toGreyscale() const
+    {
         assert(type() == CV_8UC3);
 
         Image ret(size(), type(), 1);
@@ -45,7 +68,8 @@ public:
         return ret;
     }
 
-    Image toColored() const {
+    Image toColored() const
+    {
         assert(type() == CV_8UC1);
 
         Image ret(size(), type(), 3);
@@ -53,7 +77,8 @@ public:
         return ret;
     }
 
-    std::array<Image, 3> toChannels() const {
+    std::array<Image, 3> toChannels() const
+    {
         assert(type() == CV_8UC3);
 
         std::array<Image, 3> ret;
@@ -61,6 +86,25 @@ public:
         cv::extractChannel(*this, ret[1], 1);
         cv::extractChannel(*this, ret[2], 2);
 
+        return ret;
+    }
+
+    Image resized(const cv::Size &dst_size) const
+    {
+        Image ret(dst_size, type());
+        cv::resize(*this, ret, dst_size);
+        return ret;
+    };
+
+    inline Image resized(int width, int height) const
+    {
+        return resized({ width, height });
+    }
+
+    Image blurred(int kernel_size) const
+    {
+        Image ret;
+        cv::blur(*this, ret, { kernel_size, kernel_size });
         return ret;
     }
 };

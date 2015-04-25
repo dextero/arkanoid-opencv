@@ -48,21 +48,34 @@ public:
         Logger::get("capture").debug("starting");
 
         bool running = true;
+        if (capture.isOpened()) {
+            Logger::get("capture").info("capture initialized");
+        } else {
+            Logger::get("capture").error("could not initialize capture");
+            running = false;
+        }
+
         while (!force_stop && running) {
             Message msg;
             while (control.try_pop(msg)) {
-                Logger::get("capture").debug("msg: %d", (int)msg.type);
+                Logger::get("capture").debug("msg: %d", (int) msg.type);
 
                 switch (msg.type) {
-                case Message::Type::Exit: running = false; break;
+                case Message::Type::Exit:
+                    running = false;
+                    break;
                 }
             }
 
-            Logger::get("capture").debug("grabbing");
+            Logger::get("capture").trace("grabbing");
             Image frame;
-            capture.read(frame);
+            if (!capture.read(frame)) {
+                Logger::get("capture").error("read failed");
+                running = false;
+            }
+
             images.try_push(std::move(frame));
-            Logger::get("capture").debug("frame");
+            Logger::get("capture").trace("frame");
         }
 
         Logger::get("capture").info("capture thread stopped");
@@ -106,6 +119,7 @@ int main() {
         std::map<char, std::function<void(void)>> key_handlers;
         add_setting_adjuster(key_handlers, settings.motion_threshold, '1', 'q', (unsigned char)5);
         add_setting_adjuster(key_handlers, settings.min_poly_area,    '2', 'w', 5);
+        add_setting_adjuster(key_handlers, settings.blurred_threshold, '3', 'e', (unsigned char)5);
         key_handlers[' '] = [&settings](){ settings.show_background = !settings.show_background; };
         key_handlers['0'] = [&settings](){ settings.show_debug_contours = !settings.show_debug_contours; };
         key_handlers['c'] = [](){ Logger::toggle("capture"); };
@@ -115,7 +129,8 @@ int main() {
         key_handlers['m'] = [](){ Logger::toggle("marker"); };
         key_handlers['a'] = [&detector] { detector.toggleCalibration(); };
 
-        Logger::disable("capture");
+        Logger::get("capture").set_log_level(Logger::LogLevel::DEBUG);
+//        Logger::disable("capture");
         Logger::disable("kalman");
         Logger::disable("fps");
 

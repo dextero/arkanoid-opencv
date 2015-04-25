@@ -7,11 +7,45 @@
 
 #include <opencv2/opencv.hpp>
 #include <utils/logger.h>
+#include <utils/scoped_timer.h>
 
 #include "image.h"
 #include "bounded_value.h"
 #include "percent_point.h"
 #include "window.h"
+
+template<size_t N, size_t I, typename T, typename... Tail>
+struct n_tuple
+{
+    typedef typename n_tuple<N, I - 1, T, T, Tail...>::tuple_type tuple_type;
+    typedef typename std::array<T, N> array_type;
+
+    static tuple_type from_array(array_type&& array, Tail&&... args)
+    {
+        return n_tuple<N, I - 1, T, T, Tail...>::from_array(
+                std::forward<array_type>(array),
+                std::forward<Tail>(args)...,
+                std::move(array[I - 1]));
+    }
+};
+
+template<size_t N, typename T, typename... Tail>
+struct n_tuple<N, 1, T, Tail...>
+{
+    typedef typename std::tuple<T, Tail...> tuple_type;
+    typedef typename std::array<T, N> array_type;
+
+    static std::tuple<T, Tail...> from_array(array_type&& array, Tail&&... args)
+    {
+        return std::make_tuple(std::move(array[0]), std::forward<Tail>(args)...);
+    }
+};
+
+template<typename T, size_t N>
+typename n_tuple<N, N, T>::tuple_type unpack(std::array<T, N>&& array)
+{
+    return n_tuple<N, N, T>::from_array(std::forward<std::array<T, N>>(array));
+}
 
 namespace {
     cv::RNG rng(1);
@@ -200,6 +234,8 @@ public:
         _prev_enclosing_rect = enclosing_rect;
     }
 
+    Image _last_preprocessed;
+
     void nextFrame(const Image &frame) {
         if (calibration_state == CalibrationState::Calibrating) {
             doCalibrate(frame);
@@ -228,6 +264,8 @@ public:
             } else {
                 _marker.update();
             }
+
+            _last_preprocessed = std::move(preprocessed);
         }
     }
 
@@ -237,16 +275,29 @@ public:
         bool show_bg = settings.show_background
                || calibration_state == CalibrationState::Preparing;
 
+#if 0
         if (!_curr_frame.empty()) {
-            Image scaled_frame(ret.size(), _curr_frame.type());
-            cv::resize(_curr_frame, scaled_frame, scaled_frame.size());
-            ret += scaled_frame;
+            ret += _curr_frame.resized(ret.size());
         }
+#else
+        if (!_last_preprocessed.empty()) {
+            ret += _last_preprocessed.resized(ret.size());
+
+#if 0
+            std::vector<cv::Vec4i> lines;
+            cv::HoughLinesP(scaled_frame.toGreyscale(), lines,
+                            1, CV_PI / 180.0, 150, 25, 15);
+
+            for (const auto &line: lines) {
+                cv::line(ret, {line[0], line[1]}, {line[2], line[3]},
+                         cv::Scalar(0, 0, 255), 8, 2, 0);
+            }
+#endif
+        }
+#endif
 
 //        if (show_bg) {
-//            Image scaled_bg(ret.size(), background.type());
-//            cv::resize(background, scaled_bg, scaled_bg.size());
-//            ret += scaled_bg;
+//            ret += background.resized(ret.size());
 //        }
 
         if (calibration_state == CalibrationState::Preparing) {
@@ -263,6 +314,7 @@ public:
 
     struct Settings {
         BoundedValue<uint8_t, 0, 255> motion_threshold = 200;
+        BoundedValue<uint8_t, 0, 255> blurred_threshold = 20;
         BoundedValue<int, 0, 1000> min_poly_area = 300;
         bool show_background = true;
         bool show_debug_contours = true;
@@ -274,6 +326,7 @@ public:
 #define DRAW_SETTING(Name) \
     drawTextLine(textImage, line_num++, #Name " = " + std::to_string(Name))
             DRAW_SETTING(motion_threshold);
+            DRAW_SETTING(blurred_threshold);
             DRAW_SETTING(min_poly_area);
             DRAW_SETTING(show_background);
             DRAW_SETTING(show_debug_contours);
@@ -323,6 +376,8 @@ private:
         float THRESHOLD = 40;
         float GREYSCALE_THRESHOLD = 230;
 
+        return image.clone();
+
         Image ret(image.size(), image.type());
         cv::absdiff(image, _significant_color, ret);
         cv::threshold(ret, ret, THRESHOLD, 255, cv::THRESH_BINARY_INV);
@@ -333,7 +388,24 @@ private:
         Image rgbMask(image.size(), image.type());
         cv::cvtColor(mask, rgbMask, cv::COLOR_GRAY2BGR);
 
-        return image & rgbMask;
+        image &= rgbMask;
+
+#if 0
+        Image small = image.resized(320, 240)
+
+        Image blurred(small.size(), small.type());
+        cv::blur(small, blurred, {9, 9}, {4, 4}, cv::BORDER_DEFAULT);
+#else
+        Image blurred(image.size(), CV_8UC1);
+        int KERNEL_SIZE = 17;
+        cv::blur(image.toGreyscale(), blurred,
+                 {KERNEL_SIZE, KERNEL_SIZE},
+                 {KERNEL_SIZE / 2 + 1, KERNEL_SIZE / 2 + 1},
+                 cv::BORDER_DEFAULT);
+#endif
+        cv::threshold(blurred, blurred, settings.blurred_threshold, 255, cv::THRESH_BINARY);
+
+        return blurred.toColored();
     }
 
     static bool tryGetCenterPoint(const std::vector<std::vector<cv::Point>>& contours,
@@ -440,6 +512,9 @@ private:
             drawDebugContours(out_image);
         }
 
+        _marker.getSmoothedPosition(out_image.size());
+        return;
+
         cv::Rect enclosing_rect = findEnclosingRect();
         cv::rectangle(out_image, enclosing_rect.tl(), enclosing_rect.br(),
                       cv::Scalar(0, 255, 0), 2, 8, 0);
@@ -454,29 +529,42 @@ private:
 
     Image amplifyMotion(const Image& prev_frame,
                         const Image& curr_frame) {
-        Image diff = curr_frame - prev_frame;
-//        cv::fastNlMeansDenoising(diff, diff, 15, 3, 3);
+        ScopedTimer timer("amplifyMotion: ");
+        cv::Size small_size(320, 240);
+
+        Image diff = (curr_frame - prev_frame);
 
         Image r, g, b;
-//            std::tie(b, g, r) = unpack(diff.toChannels());
-        cv::extractChannel(diff, r, 2);
-        cv::extractChannel(diff, g, 1);
-        cv::extractChannel(diff, b, 0);
+        std::tie(b, g, r) = unpack(diff.toChannels());
 
-        cv::equalizeHist(r, r);
-        cv::equalizeHist(g, g);
-        cv::equalizeHist(b, b);
+        for (Image* channel_ptr: { &r, &g, &b }) {
+            Image& channel = *channel_ptr;
+            channel = channel.resized(small_size);
+            cv::equalizeHist(channel, channel);
+        }
 
-        Image rgb(diff.size(), diff.type());
-        cv::insertChannel(r, rgb, 2);
-        cv::insertChannel(g, rgb, 1);
-        cv::insertChannel(b, rgb, 0);
+        Image rgb = Image::fromChannels(b, g, r);
+
+        Image greyscale_big = rgb.toGreyscale();
+        Image greyscale = greyscale_big.resized(small_size);
+
+        Image denoised;
+        {
+            ScopedTimer timer("denoise: ");
+            cv::fastNlMeansDenoising(greyscale, denoised, 3, 7, 9);
+        }
+
+        Image blurred;
+        {
+            ScopedTimer timer("blur: ");
+            blurred = denoised.blurred(7);
+        }
 
         Image preprocessed;
-        cv::threshold(rgb.toGreyscale().toColored(), preprocessed,
+        cv::threshold(blurred.toColored(), preprocessed,
                       settings.motion_threshold, 255, cv::THRESH_BINARY);
 
-        return preprocessed;
+        return preprocessed.resized(curr_frame.cols, curr_frame.rows);
     }
 };
 

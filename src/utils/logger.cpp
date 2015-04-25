@@ -27,23 +27,31 @@ public:
         Blue = 34
     };
 
-#define DEFINE_LOG_LEVEL(Name, Color, Prefix) \
+#define DEFINE_LOG_LEVEL(Name, Level, Color, Prefix) \
     virtual void Name(const char* msg, ...) \
     { \
-        va_list list; \
-        va_start(list, msg); \
-        log_internal(Color, Prefix, msg, list); \
-        va_end(list); \
+        if (Level >= _level) { \
+            va_list list; \
+            va_start(list, msg); \
+            log_internal(Color, Prefix, msg, list); \
+            va_end(list); \
+        } \
     }
 
-    DEFINE_LOG_LEVEL(printf, Color::White, "")
-    DEFINE_LOG_LEVEL(trace, Color::White, "[TRACE] ")
-    DEFINE_LOG_LEVEL(debug, Color::Blue, "[DEBUG] ")
-    DEFINE_LOG_LEVEL(info, Color::Green, "[INFO] ")
-    DEFINE_LOG_LEVEL(warn, Color::Yellow, "[WARN] ")
-    DEFINE_LOG_LEVEL(err, Color::Red, "[ERR] ")
+    virtual void set_log_level(LogLevel level)
+    {
+        _level = level;
+    }
+
+    DEFINE_LOG_LEVEL(printf, LogLevel::ERROR, Color::White, "")
+    DEFINE_LOG_LEVEL(trace, LogLevel::TRACE, Color::White, "[TRACE] ")
+    DEFINE_LOG_LEVEL(debug, LogLevel::DEBUG, Color::Blue, "[DEBUG] ")
+    DEFINE_LOG_LEVEL(info, LogLevel::INFO, Color::Green, "[INFO] ")
+    DEFINE_LOG_LEVEL(warn, LogLevel::WARNING, Color::Yellow, "[WARN] ")
+    DEFINE_LOG_LEVEL(err, LogLevel::ERROR, Color::Red, "[ERR] ")
 
 private:
+    LogLevel _level = LogLevel::TRACE;
     const std::string _name;
     FILE* _output;
 

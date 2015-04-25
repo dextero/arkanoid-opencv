@@ -18,6 +18,16 @@
 class Logger
 {
 public:
+    enum class LogLevel
+    {
+        TRACE,
+        DEBUG,
+        INFO,
+        WARNING,
+        ERROR,
+        QUIET,
+    };
+
     virtual ~Logger() { flush(); }
 
     Logger(const Logger&) = delete;
@@ -29,6 +39,8 @@ public:
     static void toggle(const std::string& name);
     static void enable(const std::string& name);
     static void disable(const std::string& name);
+
+    virtual void set_log_level(LogLevel /*level*/) {}
 
     virtual void  printf(const char* /*msg*/, ...) {}
     virtual void   trace(const char* /*msg*/, ...) {}
