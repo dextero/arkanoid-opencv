@@ -131,6 +131,11 @@ int main() {
         key_handlers['m'] = [](){ Logger::toggle("marker"); };
         key_handlers['a'] = [&detector] { detector.toggleCalibration(); };
 
+        key_handlers['i'] = [&tetris_board] { tetris_board.rotatePiece(); };
+        key_handlers['j'] = [&tetris_board] { tetris_board.movePiece(-1); };
+        key_handlers['l'] = [&tetris_board] { tetris_board.movePiece(1); };
+        key_handlers['k'] = [&tetris_board] { tetris_board.advance(); };
+
         Logger::get("capture").set_log_level(Logger::LogLevel::DEBUG);
 //        Logger::disable("capture");
         Logger::disable("kalman");

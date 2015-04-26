@@ -15,6 +15,14 @@
 #include <opencv2/core/core.hpp>
 #include <image.h>
 #include <cstdarg>
+#include <utils/logger.h>
+
+template<typename T>
+T clamp(T val, T min_val, T max_val)
+{
+    return std::max(min_val,
+                    std::min(max_val, val));
+}
 
 namespace tetris {
 
@@ -110,7 +118,12 @@ private:
     friend class Column<const Array2D>;
 };
 
-typedef std::vector<uint8_t> OrientedTetromino;
+struct OrientedTetromino
+{
+    std::vector<uint8_t> fields;
+    size_t width;
+    size_t height;
+};
 
 class Tetromino
 {
@@ -125,7 +138,7 @@ public:
     {
         assert(std::all_of(_orientations.begin(), _orientations.end(),
                            [ width, height ](const OrientedTetromino& o) {
-                               return o.size() == width * height;
+                               return o.fields.size() == width * height;
                            }));
     }
 
@@ -148,17 +161,32 @@ public:
                     const Coords& at) const
     {
         if (at.x + width > board_fields.width) {
+            Logger::get("tetris").info("cannot place: %u+%u is too far right", at.x, width);
             return false;
         }
-        if (at.y + height > board_fields.width) {
+        if (at.y > board_fields.height) {
+            Logger::get("tetris").info("cannot place: %u is too far up", at.y);
             return false;
         }
 
         const OrientedTetromino& tetromino_fields = _orientations[_curr_orientation];
-        for (size_t idx = 0; idx < tetromino_fields.size(); ++idx) {
-            Coords c = coords(idx) + at;
+        for (size_t idx = 0; idx < tetromino_fields.fields.size(); ++idx) {
+            if (!tetromino_fields.fields[idx]) {
+                continue;
+            }
+
+            cv::Point2i c = coords(idx) + cv::Point2i((int)at.x, (int)at.y);
+            if (c.y == -1) {
+                return false;
+            }
+
+            assert(c.x >= 0);
+            assert(c.y >= 0);
+            assert(c.x < (int)board_fields.width);
+            assert(c.y < (int)board_fields.height);
 
             if (board_fields[c.x][c.y]) {
+                Logger::get("tetris").info("cannot place: field %u, %u occupied", c.x, c.y);
                 return false;
             }
         }
@@ -167,18 +195,27 @@ public:
     }
 
     void placeAt(Array2D<uint8_t>& board_fields,
-                 const Coords& at)
+                 const Coords& at,
+                 uint8_t value)
     {
         const OrientedTetromino& tetromino_fields = _orientations[_curr_orientation];
-        for (size_t idx = 0; idx < tetromino_fields.size(); ++idx) {
-            Coords c = coords(idx) + at;
+        for (size_t idx = 0; idx < tetromino_fields.fields.size(); ++idx) {
+            if (!tetromino_fields.fields[idx]) {
+                continue;
+            }
 
-            assert(c.x < board_fields.width);
-            assert(c.y < board_fields.height);
+            cv::Point2i c = coords(idx) + cv::Point2i((int)at.x, (int)at.y);
+            assert(c.x >= 0);
+            assert(c.y >= 0);
+            assert(c.x < (int)board_fields.width);
+            assert(c.y < (int)board_fields.height);
 
-            board_fields[c.x][c.y] = true;
+            board_fields[c.x][c.y] = value;
         }
     }
+
+    size_t get_real_width() const { return _orientations[_curr_orientation].width; }
+    size_t get_real_height() const { return _orientations[_curr_orientation].height; }
 
     const size_t width;
     const size_t height;
@@ -192,11 +229,11 @@ private:
         return x + y * width;
     }
 
-    inline Coords coords(size_t idx) const
+    inline cv::Point2i coords(size_t idx) const
     {
         assert(idx < width * height);
 
-        return { (unsigned)(idx % width), (unsigned)(idx / width) };
+        return { (int)(idx % width), -(int)(idx / width) };
     }
 
     std::vector<OrientedTetromino> _orientations;
@@ -208,9 +245,12 @@ Tetromino make_tetromino(size_t width,
                          size_t num_orientations,
                          ...)
 {
+    std::vector<
     std::vector<OrientedTetromino> orientations(num_orientations);
     for (auto& ot: orientations) {
-        ot.resize(width * height, false);
+        ot.fields.resize(width * height, 1);
+        ot.width = width;
+        ot.height = height;
     }
 
     va_list list;
@@ -225,13 +265,60 @@ Tetromino make_tetromino(size_t width,
             size_t x = 0;
             while (*part) {
                 size_t idx = x + y * width;
-                orientation[idx] = (*part != ' ');
+                orientation.fields[idx] = (uint8_t)(*part != ' ' ? 1 : 0);
+                ++x;
                 ++part;
             }
         }
     }
 
     va_end(list);
+
+    for (auto& o: orientations) {
+        for (size_t x = 0; x < width; ++x) {
+            bool col_free = true;
+
+            for (size_t y = 0; y < height; ++y) {
+                if (o.fields[x + y * width]) {
+                    col_free = false;
+                }
+            }
+
+            if (col_free) {
+                --o.width;
+            }
+        }
+
+        for (size_t y = 0; y < height; ++y) {
+            bool row_free = true;
+
+            for (size_t x = 0; x < width; ++x) {
+                if (o.fields[x + y * width]) {
+                    row_free = false;
+                }
+            }
+
+            if (row_free) {
+                --o.height;
+            }
+        }
+    }
+
+    std::cout << "loaded tetromino:\n";
+    for (size_t row = 0; row < height; ++row) {
+        std::stringstream line;
+
+        for (const auto& o: orientations) {
+            line << "|";
+            size_t start_idx = row * width;
+            for (size_t col = 0; col < width; ++col) {
+                line << (o.fields[start_idx + col] ? "X" : " ");
+            }
+            line << "| ";
+        }
+
+        std::cout << line.str() << "\n";
+    }
 
     return Tetromino(width, height, std::move(orientations));
 };
@@ -287,13 +374,6 @@ public:
     {
         assert(width > 0);
         assert(height > 0);
-
-        RNG<size_t> x_rng(0, width - 1);
-        RNG<size_t> y_rng(0, height - 1);
-
-        for (size_t i = 0; i < 20; ++i) {
-            _fields[x_rng.next()][y_rng.next()] = true;
-        }
     }
 
     void advance()
@@ -301,8 +381,10 @@ public:
         Coords new_pos = _curr_piece_pos;
         --new_pos.y;
 
-        if (!_curr_piece.canPlaceAt(_fields, new_pos)) {
-            _curr_piece.placeAt(_fields, _curr_piece_pos);
+        if (_curr_piece.canPlaceAt(_fields, new_pos)) {
+            _curr_piece_pos = new_pos;
+        } else {
+            _curr_piece.placeAt(_fields, _curr_piece_pos, 1);
 
             resetPiece();
         }
@@ -311,21 +393,23 @@ public:
     void rotatePiece()
     {
         _curr_piece.rotate();
+
+        size_t max_x = _fields.width - _curr_piece.get_real_width();
+        Logger::get("tetris").info("x was %u, new max = %u, real width = %u", _curr_piece_pos.x, max_x, _curr_piece.get_real_width());
+        _curr_piece_pos.x = clamp(_curr_piece_pos.x, 0U, (unsigned)max_x);
+
+        assert(_curr_piece.canPlaceAt(_fields, _curr_piece_pos));
     }
 
     void movePiece(int delta)
     {
         int curr_x = (int) _curr_piece_pos.x;
-        int new_x = curr_x + delta;
-
-        if (new_x < 0) {
-            new_x = 0;
-        } else if (new_x >= (int)_fields.width) {
-            new_x = (int) _fields.width - (int) _curr_piece.width;
-        }
+        size_t max_x = _fields.width - _curr_piece.get_real_width();
+        Logger::get("tetris").info("x was %u, new max = %u, real width = %u", _curr_piece_pos.x, max_x, _curr_piece.get_real_width());
+        int new_x = clamp(curr_x + delta, 0, (int)max_x);
 
         assert(new_x >= 0);
-        _curr_piece_pos.x = (size_t) new_x;
+        _curr_piece_pos.x = (unsigned) new_x;
     }
 
     void drawOnto(Image& img)
@@ -334,6 +418,7 @@ public:
         int field_size = std::min(board_rect.width / (int) _fields.width,
                                   board_rect.height / (int) _fields.height);
 
+        _curr_piece.placeAt(_fields, _curr_piece_pos, 2);
         for (size_t y = 0; y < _fields.height; ++y) {
             for (size_t x = 0; x < _fields.width; ++x) {
                 if (!_fields[x][y]) {
@@ -350,10 +435,15 @@ public:
                     top_left.y + field_size
                 };
 
-                cv::rectangle(img, top_left, bottom_right,
-                              cv::Scalar(0, 255, 0));
+                cv::Scalar color =
+                    _fields[x][y] == 1 ? cv::Scalar(0, 255, 0)
+                                       : cv::Scalar(255, 0, 0);
+                cv::rectangle(img, top_left, bottom_right, color, -1);
             }
         };
+        _curr_piece.placeAt(_fields, _curr_piece_pos, 0);
+
+        cv::rectangle(img, board_rect, cv::Scalar(0, 255, 0));
     };
 
 private:
@@ -389,7 +479,7 @@ private:
     Coords getPieceInitialPos()
     {
         return { (unsigned)(_fields.width / 2 - _curr_piece.width / 2),
-                 (unsigned)(_fields.height - _curr_piece.height / 2) };
+                 (unsigned)(_fields.height - _curr_piece.height) };
     }
 
     void resetPiece()
@@ -404,6 +494,6 @@ private:
     Coords _curr_piece_pos;
 };
 
-} // namespace tetris
+}; // namespace tetris
 
 #endif //PONG_BOARD_H
