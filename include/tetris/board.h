@@ -92,6 +92,13 @@ public:
     const Column<const Array2D> operator[](size_t idx) const
     { return { *this, idx }; }
 
+    void fill(T value)
+    {
+        for (auto& elem: _fields) {
+            elem = value;
+        }
+    }
+
     const size_t width;
     const size_t height;
 
@@ -140,10 +147,15 @@ public:
         return *this;
     }
 
-    void rotate()
+    void rotate(bool reverse = false)
     {
         assert(_orientations.size() > 0);
-        _curr_orientation = (_curr_orientation + 1) % _orientations.size();
+        if (reverse) {
+            _curr_orientation += (_orientations.size() - 1);
+        } else {
+            ++_curr_orientation;
+        }
+        _curr_orientation = _curr_orientation % _orientations.size();
     }
 
     bool canPlaceAt(const Array2D<uint8_t>& board_fields,
@@ -236,7 +248,6 @@ public:
         }
 
         if (def) {
-            std::cout << curr_orientation << ": '" << def << "'\n";
             orientation_defs[curr_orientation].emplace_back(def);
         }
 
@@ -259,7 +270,6 @@ public:
             size_t len = def.front().size();
             for (size_t i = 0 ; i < def.size(); ++i) {
                 const std::string& row = def[i];
-                std::cout << def_idx << " " << i << " '" << row << "'\n";
                 assert(row.size() == len);
             }
         }
@@ -351,6 +361,12 @@ public:
         assert(height > 0);
     }
 
+    void restart()
+    {
+        _fields.fill(0);
+        resetPiece();
+    }
+
     void advance()
     {
         Coords new_pos = _curr_piece_pos;
@@ -360,6 +376,14 @@ public:
             _curr_piece_pos = new_pos;
         } else {
             _curr_piece.placeAt(_fields, _curr_piece_pos, 1);
+
+            for (size_t y = 0; y < _fields.height;) {
+                if (isRowFull(y)) {
+                    clearRow(y);
+                } else {
+                    ++y;
+                }
+            }
 
             resetPiece();
         }
@@ -371,10 +395,17 @@ public:
 
         size_t max_x = _fields.width - _curr_piece.width();
         Logger::get("tetris").info("x was %u, new max = %u, width = %u", _curr_piece_pos.x, max_x, _curr_piece.width());
-        _curr_piece_pos.x = clamp(_curr_piece_pos.x, 0U, (unsigned)max_x);
+        Coords new_pos {
+            clamp(_curr_piece_pos.x, 0U, (unsigned) max_x),
+            _curr_piece_pos.y
+        };
 
-        assert(_curr_piece.canPlaceAt(_fields, _curr_piece_pos));
-    }
+        if (_curr_piece.canPlaceAt(_fields, new_pos)) {
+            _curr_piece_pos = new_pos;
+        } else {
+            _curr_piece.rotate(true);
+        }
+    };
 
     void movePiece(int delta)
     {
@@ -384,11 +415,16 @@ public:
         int new_x = clamp(curr_x + delta, 0, (int)max_x);
 
         assert(new_x >= 0);
-        _curr_piece_pos.x = (unsigned) new_x;
-    }
+        Coords new_pos { (unsigned)new_x, _curr_piece_pos.y };
+        if (_curr_piece.canPlaceAt(_fields, new_pos)) {
+            _curr_piece_pos = new_pos;
+        }
+    };
 
     void drawOnto(Image& img)
     {
+        Image board_img(img.size(), img.type());
+
         cv::Rect board_rect = getBoardRect(img.size());
         int field_size = std::min(board_rect.width / (int) _fields.width,
                                   board_rect.height / (int) _fields.height);
@@ -411,17 +447,42 @@ public:
                 };
 
                 cv::Scalar color =
-                    _fields[x][y] == 1 ? cv::Scalar(0, 255, 0)
-                                       : cv::Scalar(255, 0, 0);
-                cv::rectangle(img, top_left, bottom_right, color, -1);
+                    _fields[x][y] == 1 ? cv::Scalar(0, 255, 0, 128)
+                                       : cv::Scalar(255, 0, 0, 128);
+                cv::rectangle(board_img, top_left, bottom_right, color, -1);
             }
         };
         _curr_piece.placeAt(_fields, _curr_piece_pos, 0);
 
-        cv::rectangle(img, board_rect, cv::Scalar(0, 255, 0));
+        cv::rectangle(board_img, board_rect, cv::Scalar(0, 255, 0));
+        img ^= board_img;
     };
 
 private:
+    bool isRowFull(size_t row)
+    {
+        for (size_t x = 0; x < _fields.width; ++x) {
+            if (!_fields[x][row]) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    void clearRow(size_t row)
+    {
+        for (size_t y = row + 1; y < _fields.height - 1; ++y) {
+            for (size_t x = 0; x < _fields.width; ++x) {
+                _fields[x][y - 1] = _fields[x][y];
+            }
+        }
+
+        for (size_t x = 0; x < _fields.width; ++x) {
+            _fields[x][_fields.height - 1] = 0;
+        }
+    }
+
     cv::Rect getBoardRect(const cv::Size& img_size) const
     {
         float board_ratio = (float) _fields.width / (float) _fields.height;
@@ -454,13 +515,17 @@ private:
     Coords getPieceInitialPos()
     {
         return { (unsigned)(_fields.width / 2 - _curr_piece.width() / 2),
-                 (unsigned)(_fields.height - _curr_piece.height()) };
+                 (unsigned)(_fields.height - 1) };
     }
 
     void resetPiece()
     {
         _curr_piece = getNextPiece();
         _curr_piece_pos = getPieceInitialPos();
+
+        if (!_curr_piece.canPlaceAt(_fields, _curr_piece_pos)) {
+            restart();
+        }
     }
 
     RNG<size_t> _rng;
