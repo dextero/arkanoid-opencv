@@ -8,11 +8,23 @@
 #include <opencv2/opencv.hpp>
 #include <utils/logger.h>
 #include <utils/scoped_timer.h>
+#include <utils/message_queue.h>
 
 #include "image.h"
 #include "bounded_value.h"
 #include "percent_point.h"
 #include "window.h"
+
+struct Event
+{
+    enum class Type
+    {
+        Grip,
+        Release,
+    } type;
+
+    cv::Point2f pos;
+};
 
 template<size_t N, size_t I, typename T, typename... Tail>
 struct n_tuple
@@ -70,14 +82,15 @@ namespace {
 class Marker
 {
 public:
-    Marker():
+    Marker(message_queue<Event>& events):
         _grip(false),
-        _kalman(4, 2, 0)
+        _kalman(4, 2, 0),
+        _events(events)
     {
         _kalman.statePre = cv::Mat::zeros(2, 1, CV_32F);
         cv::setIdentity(_kalman.measurementMatrix);
         cv::setIdentity(_kalman.processNoiseCov, cv::Scalar::all(1e-1));
-        cv::setIdentity(_kalman.measurementNoiseCov, cv::Scalar::all(1));
+        cv::setIdentity(_kalman.measurementNoiseCov, cv::Scalar::all(10));
         cv::setIdentity(_kalman.errorCovPost, cv::Scalar::all(.5));
     }
 
@@ -116,11 +129,13 @@ public:
     void grip() {
         Logger::get("marker").debug("grip");
         _grip = true;
+        _events.try_push({ Event::Type::Grip, getSmoothedPosition({ 100, 100 }) });
     }
 
     void release() {
         Logger::get("marker").debug("release");
         _grip = false;
+        _events.try_push({ Event::Type::Release, getSmoothedPosition({ 100, 100 }) });
     }
 
     bool hasGrip() const {
@@ -131,6 +146,7 @@ private:
     cv::Point2f _last_position;
     bool _grip;
     mutable cv::KalmanFilter _kalman;
+    message_queue<Event>& _events;
 };
 
 class MotionDetector {
@@ -138,10 +154,12 @@ public:
     MotionDetector(size_t width,
                    size_t height):
         width(width),
-        height(height)
+        height(height),
+        _marker(events)
     {
     }
 
+    message_queue<Event> events { 3 };
     std::vector<std::vector<cv::Point>> _contours;
 
     std::vector<std::vector<cv::Point>> getSignificantContours(const Image& greyscale_image) const {
@@ -200,6 +218,15 @@ public:
                                        _significant_color[0],
                                        _significant_color[1],
                                        _significant_color[2]);
+    }
+
+    cv::Point2f getMarkerPos() const
+    {
+        if (!_curr_frame.empty()) {
+            return _marker.getLastPosition({ (int)width, (int)height });
+        } else {
+            return { 0.0f, 0.0f };
+        }
     }
 
     void detectGrip(const cv::Point& marker_pos) {
@@ -275,7 +302,7 @@ public:
         bool show_bg = settings.show_background
                || calibration_state == CalibrationState::Preparing;
 
-#if 0
+#if 1
         if (!_curr_frame.empty()) {
             ret += _curr_frame.resized(ret.size());
         }
@@ -513,7 +540,6 @@ private:
         }
 
         _marker.getSmoothedPosition(out_image.size());
-        return;
 
         cv::Rect enclosing_rect = findEnclosingRect();
         cv::rectangle(out_image, enclosing_rect.tl(), enclosing_rect.br(),
@@ -548,16 +574,16 @@ private:
         Image greyscale_big = rgb.toGreyscale();
         Image greyscale = greyscale_big.resized(small_size);
 
-        Image denoised;
-        {
-            ScopedTimer timer("denoise: ");
-            cv::fastNlMeansDenoising(greyscale, denoised, 3, 7, 9);
-        }
+//        Image denoised;
+//        {
+//            ScopedTimer timer("denoise: ");
+//            cv::fastNlMeansDenoising(greyscale, denoised, 3, 7, 9);
+//        }
 
         Image blurred;
         {
             ScopedTimer timer("blur: ");
-            blurred = denoised.blurred(7);
+            blurred = greyscale.blurred(7);
         }
 
         Image preprocessed;

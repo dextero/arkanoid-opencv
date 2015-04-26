@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <string>
+#include "timer.h"
 
 class ScopedTimer
 {
@@ -25,10 +26,7 @@ public:
 private:
     const std::string _message;
     const std::function<void(unsigned long)> _callback;
-    struct timespec _start_time;
-
-    void start();
-    unsigned long getElapsedNanos();
+    Timer timer;
 };
 
 #endif //_PONG_SCOPED_TIMER_H_

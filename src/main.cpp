@@ -8,13 +8,15 @@
 #include <atomic>
 
 #include <signal.h>
-#include <tetris/board.h>
+#include <pong/pong.h>
+#include <utils/timer.h>
 
 #include "motion_detector.h"
 #include "window.h"
 #include "utils/message_queue.h"
 #include "utils/fps_counter.h"
 #include "utils/logger.h"
+#include "utils/misc.h"
 
 std::atomic<bool> force_stop(false);
 
@@ -31,6 +33,26 @@ struct Message {
     Type type;
 
     static Message exit() { return { Type::Exit }; }
+};
+
+template<typename MessageT>
+class Actor: public std::thread
+{
+public:
+    message_queue<Message> control = { 25 };
+    volatile bool shutdown = false;[k
+    std::shared_ptr<message_queue<
+
+protected:
+    Actor():
+        std::thread(&InterruptibleThread::run, this)
+    {
+    }
+
+    void run()
+    {
+        while (!force_stop && running)
+    }
 };
 
 class CaptureThread: public std::thread
@@ -86,6 +108,25 @@ public:
     message_queue<Message> control = {25};
 };
 
+class DetectorThread: public std::thread
+{
+public:
+    DetectorThread(size_t width,
+                   size_t height,
+                   const std::shared_ptr<message_queue<Image>>& images,
+                   const std::shared_ptr<message_queue<Message>>& control):
+        std::thread(&DetectorThread::run, this),
+        images(images)
+    {
+    }
+
+    void run()
+    {
+    }
+
+    shared_ptr<message_queue<Image>> images;
+};
+
 template<typename T, T Min, T Max>
 void add_setting_adjuster(std::map<char, std::function<void(void)>>& key_handlers,
                           BoundedValue<T, Min, Max>& setting,
@@ -111,7 +152,7 @@ int main() {
     MotionDetector detector(800, 600);
 
     CaptureThread capture;
-    tetris::Board tetris_board(10, 20);
+    Game pong(detector.width, detector.height);
 
     try {
         char key = 0;
@@ -131,15 +172,13 @@ int main() {
         key_handlers['m'] = [](){ Logger::toggle("marker"); };
         key_handlers['a'] = [&detector] { detector.toggleCalibration(); };
 
-        key_handlers['i'] = [&tetris_board] { tetris_board.rotatePiece(); };
-        key_handlers['j'] = [&tetris_board] { tetris_board.movePiece(-1); };
-        key_handlers['l'] = [&tetris_board] { tetris_board.movePiece(1); };
-        key_handlers['k'] = [&tetris_board] { tetris_board.advance(); };
-
         Logger::get("capture").set_log_level(Logger::LogLevel::DEBUG);
 //        Logger::disable("capture");
         Logger::disable("kalman");
         Logger::disable("fps");
+
+        Timer timer;
+        const double UPDATE_STEP_S = 1.0 / 30.0;
 
         while (!force_stop && key != 27) {
             auto fpsGuard = fpsCounter.startNextFrame();
@@ -150,8 +189,18 @@ int main() {
                 detector.nextFrame(background);
             }
 
+            float paddle_pos = detector.getMarkerPos().x;
+            pong.setPaddlePos((size_t)paddle_pos);
+
+            double dt = timer.getElapsedSeconds();
+            timer.reset();
+            while (dt > UPDATE_STEP_S) {
+                pong.update(dt);
+                dt -= UPDATE_STEP_S;
+            }
+
             Image frame = detector.toImage(background);
-            tetris_board.drawOnto(frame);
+            pong.drawOnto(frame);
             window.showImage(frame);
 
             key = (char) cvWaitKey(20);
@@ -169,4 +218,4 @@ int main() {
     capture.join();
 
     return 0;
-}
+};
