@@ -128,24 +128,13 @@ struct OrientedTetromino
 class Tetromino
 {
 public:
-    Tetromino(size_t width,
-              size_t height,
-              std::vector<OrientedTetromino>&& orientations):
-        width(width),
-        height(height),
+    Tetromino(std::vector<OrientedTetromino>&& orientations):
         _orientations(std::move(orientations)),
         _curr_orientation(0)
-    {
-        assert(std::all_of(_orientations.begin(), _orientations.end(),
-                           [ width, height ](const OrientedTetromino& o) {
-                               return o.fields.size() == width * height;
-                           }));
-    }
+    {}
 
     Tetromino& operator =(const Tetromino& src)
     {
-        const_cast<size_t&>(width) = src.width;
-        const_cast<size_t&>(height) = src.height;
         _orientations = src._orientations;
         _curr_orientation = src._curr_orientation;
         return *this;
@@ -160,8 +149,8 @@ public:
     bool canPlaceAt(const Array2D<uint8_t>& board_fields,
                     const Coords& at) const
     {
-        if (at.x + width > board_fields.width) {
-            Logger::get("tetris").info("cannot place: %u+%u is too far right", at.x, width);
+        if (at.x + width() > board_fields.width) {
+            Logger::get("tetris").info("cannot place: %u+%u is too far right", at.x, width());
             return false;
         }
         if (at.y > board_fields.height) {
@@ -214,154 +203,140 @@ public:
         }
     }
 
-    size_t get_real_width() const { return _orientations[_curr_orientation].width; }
-    size_t get_real_height() const { return _orientations[_curr_orientation].height; }
-
-    const size_t width;
-    const size_t height;
+    size_t width() const { return _orientations[_curr_orientation].width; }
+    size_t height() const { return _orientations[_curr_orientation].height; }
 
 private:
     inline size_t idx(size_t x, size_t y) const
     {
-        assert(x < width);
-        assert(y < height);
+        assert(x < width());
+        assert(y < height());
 
-        return x + y * width;
+        return x + y * width();
     }
 
     inline cv::Point2i coords(size_t idx) const
     {
-        assert(idx < width * height);
+        assert(idx < width() * height());
 
-        return { (int)(idx % width), -(int)(idx / width) };
+        return { (int)(idx % width()), -(int)(idx / width()) };
     }
 
     std::vector<OrientedTetromino> _orientations;
     size_t _curr_orientation;
 };
 
-Tetromino make_tetromino(size_t width,
-                         size_t height,
-                         size_t num_orientations,
-                         ...)
+class TetrominoBuilder
 {
-    std::vector<
-    std::vector<OrientedTetromino> orientations(num_orientations);
-    for (auto& ot: orientations) {
-        ot.fields.resize(width * height, 1);
-        ot.width = width;
-        ot.height = height;
+public:
+    TetrominoBuilder& operator /(const char* def)
+    {
+        if (curr_orientation == orientation_defs.size()) {
+            orientation_defs.emplace_back();
+        }
+
+        if (def) {
+            std::cout << curr_orientation << ": '" << def << "'\n";
+            orientation_defs[curr_orientation].emplace_back(def);
+        }
+
+        ++curr_orientation;
+        return *this;
     }
 
-    va_list list;
-    va_start(list, num_orientations);
+    TetrominoBuilder& operator *(const char* def)
+    {
+        curr_orientation = 0;
+        return *this / def;
+    }
 
-    for (size_t y = 0; y < height; ++y) {
-        for (auto& orientation: orientations) {
-            const char* part = va_arg(list, const char*);
-            assert(part);
-            assert(strlen(part) == width);
-
-            size_t x = 0;
-            while (*part) {
-                size_t idx = x + y * width;
-                orientation.fields[idx] = (uint8_t)(*part != ' ' ? 1 : 0);
-                ++x;
-                ++part;
+    Tetromino build()
+    {
+        assert(orientation_defs.size() > 0);
+        for (size_t def_idx = 0; def_idx < orientation_defs.size(); ++def_idx) {
+            const std::vector<std::string>& def = orientation_defs[def_idx];
+            assert(def.size() > 0);
+            size_t len = def.front().size();
+            for (size_t i = 0 ; i < def.size(); ++i) {
+                const std::string& row = def[i];
+                std::cout << def_idx << " " << i << " '" << row << "'\n";
+                assert(row.size() == len);
             }
         }
-    }
 
-    va_end(list);
+        std::vector<OrientedTetromino> orientations(orientation_defs.size());
+        for (size_t i = 0; i < orientation_defs.size(); ++i) {
+            std::vector<std::string>& def = orientation_defs[i];
+            OrientedTetromino& ot = orientations[i];
 
-    for (auto& o: orientations) {
-        for (size_t x = 0; x < width; ++x) {
-            bool col_free = true;
+            ot.width = def.front().size();
+            ot.height = def.size();
+            ot.fields.resize(ot.width * ot.height);
 
-            for (size_t y = 0; y < height; ++y) {
-                if (o.fields[x + y * width]) {
-                    col_free = false;
+            for (size_t y = 0; y < ot.height; ++y) {
+                const std::string& row = def[y];
+
+                for (size_t x = 0; x < row.size(); ++x) {
+                    size_t idx = x + y * ot.width;
+                    ot.fields[idx] = (uint8_t)(row[x] != ' ' ? 1 : 0);
                 }
             }
-
-            if (col_free) {
-                --o.width;
-            }
         }
 
-        for (size_t y = 0; y < height; ++y) {
-            bool row_free = true;
+        std::cout << "loaded tetromino:\n";
+        for (size_t row = 0; row < orientations.front().width; ++row) {
+            std::stringstream line;
 
-            for (size_t x = 0; x < width; ++x) {
-                if (o.fields[x + y * width]) {
-                    row_free = false;
+            for (const auto& o: orientations) {
+                line << "|";
+                size_t start_idx = row * o.width;
+                for (size_t col = 0; col < o.width; ++col) {
+                    line << (o.fields[start_idx + col] ? "X" : " ");
                 }
+                line << "| ";
             }
 
-            if (row_free) {
-                --o.height;
-            }
-        }
-    }
-
-    std::cout << "loaded tetromino:\n";
-    for (size_t row = 0; row < height; ++row) {
-        std::stringstream line;
-
-        for (const auto& o: orientations) {
-            line << "|";
-            size_t start_idx = row * width;
-            for (size_t col = 0; col < width; ++col) {
-                line << (o.fields[start_idx + col] ? "X" : " ");
-            }
-            line << "| ";
+            std::cout << line.str() << "\n";
         }
 
-        std::cout << line.str() << "\n";
+        return Tetromino(std::move(orientations));
     }
 
-    return Tetromino(width, height, std::move(orientations));
+private:
+    std::vector<std::vector<std::string>> orientation_defs;
+    size_t curr_orientation = 0;
 };
 
 const std::array<Tetromino, 7> BLOCKS {{
-                                           make_tetromino(3, 3, 2,
-                                                          "XX ", " X ",
-                                                          " XX", "XX ",
-                                                          "   ", "X  "),
-                                           make_tetromino(3, 3, 2,
-                                                          " XX", " X ",
-                                                          "XX ", " XX",
-                                                          "   ", "  X"),
-                                           make_tetromino(3, 3, 4,
-                                                          " X ", "   ", "XX ",
-                                                          "  X",
-                                                          " X ", "XXX", " X ",
-                                                          "XXX",
-                                                          " XX", "X  ", " X ",
-                                                          "   "),
-                                           make_tetromino(3, 3, 4,
-                                                          " X ", "X  ", " XX",
-                                                          "   ",
-                                                          " X ", "XXX", " X ",
-                                                          "XXX",
-                                                          "XX ", "   ", " X ",
-                                                          "  X"),
-                                           make_tetromino(4, 4, 2,
-                                                          " X  ", "    ",
-                                                          " X  ", "XXXX",
-                                                          " X  ", "    ",
-                                                          " X  ", "    "),
-                                           make_tetromino(2, 2, 1,
-                                                          "XX",
-                                                          "XX"),
-                                           make_tetromino(3, 3, 4,
-                                                          " X ", "   ", " X ",
-                                                          " X ",
-                                                          " XX", "XXX", "XX ",
-                                                          "XXX",
-                                                          " X ", " X ", " X ",
-                                                          "   "),
-                                       }};
+    (TetrominoBuilder()
+        * "XX " / " X"
+        * " XX" / "XX"
+        * NULL  / "X ").build(),
+    (TetrominoBuilder()
+        * " XX" / "X "
+        * "XX " / "XX"
+        * NULL  / " X").build(),
+    (TetrominoBuilder()
+        * "X " / "XXX" / "XX" / "  X"
+        * "X " / "X  " / " X" / "XXX"
+        * "XX" / NULL  / " X" / NULL).build(),
+    (TetrominoBuilder()
+        * " X" / "X  " / "XX" / "XXX"
+        * " X" / "XXX" / "X " / "  X"
+        * "XX" / NULL  / "X " / NULL).build(),
+    (TetrominoBuilder()
+        * "X" / "XXXX"
+        * "X" / NULL
+        * "X" / NULL
+        * "X" / NULL).build(),
+    (TetrominoBuilder()
+        * "XX"
+        * "XX").build(),
+    (TetrominoBuilder()
+        * "X " / "XXX" / " X" / " X "
+        * "XX" / " X " / "XX" / "XXX"
+        * "X " / NULL  / " X" / NULL).build(),
+}};
 
 class Board
 {
@@ -394,8 +369,8 @@ public:
     {
         _curr_piece.rotate();
 
-        size_t max_x = _fields.width - _curr_piece.get_real_width();
-        Logger::get("tetris").info("x was %u, new max = %u, real width = %u", _curr_piece_pos.x, max_x, _curr_piece.get_real_width());
+        size_t max_x = _fields.width - _curr_piece.width();
+        Logger::get("tetris").info("x was %u, new max = %u, width = %u", _curr_piece_pos.x, max_x, _curr_piece.width());
         _curr_piece_pos.x = clamp(_curr_piece_pos.x, 0U, (unsigned)max_x);
 
         assert(_curr_piece.canPlaceAt(_fields, _curr_piece_pos));
@@ -404,8 +379,8 @@ public:
     void movePiece(int delta)
     {
         int curr_x = (int) _curr_piece_pos.x;
-        size_t max_x = _fields.width - _curr_piece.get_real_width();
-        Logger::get("tetris").info("x was %u, new max = %u, real width = %u", _curr_piece_pos.x, max_x, _curr_piece.get_real_width());
+        size_t max_x = _fields.width - _curr_piece.width();
+        Logger::get("tetris").info("x was %u, new max = %u, width = %u", _curr_piece_pos.x, max_x, _curr_piece.width());
         int new_x = clamp(curr_x + delta, 0, (int)max_x);
 
         assert(new_x >= 0);
@@ -478,8 +453,8 @@ private:
 
     Coords getPieceInitialPos()
     {
-        return { (unsigned)(_fields.width / 2 - _curr_piece.width / 2),
-                 (unsigned)(_fields.height - _curr_piece.height) };
+        return { (unsigned)(_fields.width / 2 - _curr_piece.width() / 2),
+                 (unsigned)(_fields.height - _curr_piece.height()) };
     }
 
     void resetPiece()
