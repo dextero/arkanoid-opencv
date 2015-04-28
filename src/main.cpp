@@ -35,32 +35,17 @@ struct Message {
     static Message exit() { return { Type::Exit }; }
 };
 
-template<typename MessageT>
-class Actor: public std::thread
-{
-public:
-    message_queue<Message> control = { 25 };
-    volatile bool shutdown = false;[k
-    std::shared_ptr<message_queue<
-
-protected:
-    Actor():
-        std::thread(&InterruptibleThread::run, this)
-    {
-    }
-
-    void run()
-    {
-        while (!force_stop && running)
-    }
-};
-
 class CaptureThread: public std::thread
 {
 public:
+    volatile bool running = true;
+
     CaptureThread():
-        std::thread(&CaptureThread::run, this)
-    {}
+        std::thread()
+    {
+        std::thread actual_thread(&CaptureThread::run, this);
+        swap(actual_thread);
+    }
 
     void run() {
         cv::VideoCapture capture(-1);
@@ -70,7 +55,6 @@ public:
 
         Logger::get("capture").debug("starting");
 
-        bool running = true;
         if (capture.isOpened()) {
             Logger::get("capture").info("capture initialized");
         } else {
@@ -79,17 +63,6 @@ public:
         }
 
         while (!force_stop && running) {
-            Message msg;
-            while (control.try_pop(msg)) {
-                Logger::get("capture").debug("msg: %d", (int) msg.type);
-
-                switch (msg.type) {
-                case Message::Type::Exit:
-                    running = false;
-                    break;
-                }
-            }
-
             Logger::get("capture").trace("grabbing");
             Image frame;
             if (!capture.read(frame)) {
@@ -97,34 +70,67 @@ public:
                 running = false;
             }
 
-            images.try_push(std::move(frame));
+            images->try_push(std::move(frame));
             Logger::get("capture").trace("frame");
         }
 
         Logger::get("capture").info("capture thread stopped");
     }
 
-    message_queue<Image> images = {3};
-    message_queue<Message> control = {25};
+    std::shared_ptr<message_queue<Image>> images = std::make_shared<message_queue<Image>>(3);
 };
 
 class DetectorThread: public std::thread
 {
 public:
+    volatile bool running = true;
+
     DetectorThread(size_t width,
                    size_t height,
-                   const std::shared_ptr<message_queue<Image>>& images,
-                   const std::shared_ptr<message_queue<Message>>& control):
-        std::thread(&DetectorThread::run, this),
-        images(images)
+                   const std::shared_ptr<message_queue<Image>>& capture):
+        _capture(capture)
     {
+        std::thread actual_thread(&DetectorThread::run, this, width, height);
+        swap(actual_thread);
     }
 
-    void run()
+    void toggleCalibration()
+    { _toggle_calibration = true; }
+
+    void run(size_t width,
+             size_t height)
     {
+        MotionDetector detector(width, height);
+
+        while (!force_stop && running) {
+            Image background;
+            if (_capture->try_pop(background)) {
+                background.flip(Image::FlipAxis::Y);
+                detector.nextFrame(background);
+            }
+
+            if (_toggle_calibration) {
+                _toggle_calibration = false;
+                detector.toggleCalibration();
+            }
+
+            MotionDetector::Settings settings;
+            if (setting_changes->try_pop(settings)) {
+                detector.settings = settings;
+            }
+
+            images->try_push(detector.toImage(background));
+            marker_positions->try_push(detector.getMarkerPos());
+        }
     }
 
-    shared_ptr<message_queue<Image>> images;
+    std::shared_ptr<message_queue<Image>> images = std::make_shared<message_queue<Image>>(3);
+    std::shared_ptr<message_queue<cv::Point2f>> marker_positions = std::make_shared<message_queue<cv::Point2f>>(3);
+    std::shared_ptr<message_queue<MotionDetector::Settings>> setting_changes = std::make_shared<message_queue<MotionDetector::Settings>>(3);
+
+private:
+    std::shared_ptr<message_queue<Image>> _capture;
+    volatile bool _toggle_calibration = false;
 };
 
 template<typename T, T Min, T Max>
@@ -149,57 +155,65 @@ int main() {
 
     Window window("pong");
     FpsCounter fpsCounter;
-    MotionDetector detector(800, 600);
+
+    const size_t WIDTH = 1440;
+    const size_t HEIGHT = 900;
 
     CaptureThread capture;
-    Game pong(detector.width, detector.height);
+    DetectorThread detector(WIDTH, HEIGHT, capture.images);
+    Game pong(WIDTH, HEIGHT);
 
     try {
         char key = 0;
-        Image background(detector.width, detector.height, CV_8UC3, cv::Scalar(0, 100, 0));
-        MotionDetector::Settings& settings = detector.settings;
+        MotionDetector::Settings settings;
 
         std::map<char, std::function<void(void)>> key_handlers;
         add_setting_adjuster(key_handlers, settings.motion_threshold, '1', 'q', (unsigned char)5);
         add_setting_adjuster(key_handlers, settings.min_poly_area,    '2', 'w', 5);
         add_setting_adjuster(key_handlers, settings.blurred_threshold, '3', 'e', (unsigned char)5);
-        key_handlers[' '] = [&settings](){ settings.show_background = !settings.show_background; };
-        key_handlers['0'] = [&settings](){ settings.show_debug_contours = !settings.show_debug_contours; };
+        key_handlers['a'] = [&settings](){ settings.show_background = !settings.show_background; };
+        key_handlers['s'] = [&settings](){ settings.show_debug_contours = !settings.show_debug_contours; };
         key_handlers['c'] = [](){ Logger::toggle("capture"); };
-        key_handlers['f'] = [](){ Logger::toggle("fps"); };
-        key_handlers['t'] = [](){ Logger::toggle("threads"); };
-        key_handlers['k'] = [](){ Logger::toggle("kalman"); };
-        key_handlers['m'] = [](){ Logger::toggle("marker"); };
-        key_handlers['a'] = [&detector] { detector.toggleCalibration(); };
+        key_handlers['z'] = [](){ Logger::toggle("fps"); };
+        key_handlers['x'] = [](){ Logger::toggle("threads"); };
+        key_handlers['c'] = [](){ Logger::toggle("kalman"); };
+        key_handlers['v'] = [](){ Logger::toggle("marker"); };
+        key_handlers[' '] = [&detector] { detector.toggleCalibration(); };
 
         Logger::get("capture").set_log_level(Logger::LogLevel::DEBUG);
-//        Logger::disable("capture");
+        Logger::disable("capture");
         Logger::disable("kalman");
         Logger::disable("fps");
 
         Timer timer;
-        const double UPDATE_STEP_S = 1.0 / 30.0;
+        double dt = -3.0;
+        const double UPDATE_STEP_S = 1.0 / 60.0;
+
+        Image background(WIDTH, HEIGHT, CV_8UC3);
 
         while (!force_stop && key != 27) {
             auto fpsGuard = fpsCounter.startNextFrame();
             Logger::get("fps").info("%lf FPS", fpsCounter.getFps());
 
-            if (capture.images.try_pop(background)) {
-                background.flip(Image::FlipAxis::Y);
-                detector.nextFrame(background);
+            cv::Point2f marker_pos;
+            if (detector.marker_positions->try_pop(marker_pos)) {
+                pong.setPaddlePos((size_t)marker_pos.x);
             }
 
-            float paddle_pos = detector.getMarkerPos().x;
-            pong.setPaddlePos((size_t)paddle_pos);
-
-            double dt = timer.getElapsedSeconds();
+            dt += timer.getElapsedSeconds();
             timer.reset();
             while (dt > UPDATE_STEP_S) {
-                pong.update(dt);
+                pong.update((float)UPDATE_STEP_S);
                 dt -= UPDATE_STEP_S;
             }
 
-            Image frame = detector.toImage(background);
+            if (pong.isGameOver() || pong.isGameWon()) {
+                pong.reset();
+            }
+
+            detector.images->try_pop(background);
+
+            Image frame = background.clone();
             pong.drawOnto(frame);
             window.showImage(frame);
 
@@ -207,6 +221,7 @@ int main() {
             auto it = key_handlers.find(key);
             if (it != key_handlers.end()) {
                 it->second();
+                detector.setting_changes->try_push(MotionDetector::Settings(settings));
             }
         }
     } catch (...) {
@@ -214,8 +229,10 @@ int main() {
     }
 
     Logger::get("threads").info("exiting");
-    capture.control.try_push(Message::exit());
+    capture.running = false;
+    detector.running = false;
     capture.join();
+    detector.join();
 
     return 0;
 };

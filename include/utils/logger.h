@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <memory>
 #include <map>
+#include <mutex>
 
 class Logger
 {
@@ -58,6 +59,7 @@ private:
     static std::map<std::string, std::unique_ptr<Logger>> _loggers;
     static std::set<std::string> _disabled_loggers;
     static Logger _null_logger;
+    static std::mutex _logger_mutex;
 };
 
 #endif //_PONG_LOGGER_H_

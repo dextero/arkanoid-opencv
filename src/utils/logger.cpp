@@ -8,6 +8,7 @@
 std::set<std::string> Logger::_disabled_loggers;
 std::map<std::string, std::unique_ptr<Logger>> Logger::_loggers;
 Logger Logger::_null_logger;
+std::mutex Logger::_logger_mutex;
 
 class FileLogger: public Logger
 {
@@ -94,6 +95,8 @@ private:
 };
 
 Logger& Logger::get(const std::string& name) {
+    std::lock_guard<std::mutex> lock(_logger_mutex);
+
     if (_disabled_loggers.count(name) == 0) {
         auto it = _loggers.find(name);
 
@@ -109,6 +112,7 @@ Logger& Logger::get(const std::string& name) {
 }
 
 void Logger::toggle(const std::string& name) {
+    std::lock_guard<std::mutex> lock(_logger_mutex);
     auto it = _disabled_loggers.find(name);
 
     if (it == _disabled_loggers.end()) {
@@ -119,9 +123,11 @@ void Logger::toggle(const std::string& name) {
 }
 
 void Logger::enable(const std::string& name) {
+    std::lock_guard<std::mutex> lock(_logger_mutex);
     _disabled_loggers.erase(name);
 }
 
 void Logger::disable(const std::string& name) {
+    std::lock_guard<std::mutex> lock(_logger_mutex);
     _disabled_loggers.insert(name);
 }

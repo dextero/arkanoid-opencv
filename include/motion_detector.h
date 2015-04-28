@@ -524,26 +524,29 @@ private:
             bounding_boxes.emplace_back(std::move(bb));
         }
 
-        for (size_t i = 0; i < contours_poly.size(); ++i) {
-            cv::Scalar color = randomColor();
-            cv::drawContours(out_image, contours_poly, (int)i, color,
-                             1, 8, std::vector<cv::Vec4i>(), 0, cv::Point() );
-            cv::rectangle(out_image,
-                          bounding_boxes[i].tl(), bounding_boxes[i].br(),
-                          color, 2, 8, 0 );
+        if (settings.show_debug_contours) {
+            for (size_t i = 0; i < contours_poly.size(); ++i) {
+                cv::Scalar color = randomColor();
+                cv::drawContours(out_image, contours_poly, (int) i, color,
+                                 1, 8, std::vector<cv::Vec4i>(), 0,
+                                 cv::Point());
+                cv::rectangle(out_image,
+                              bounding_boxes[i].tl(), bounding_boxes[i].br(),
+                              color, 2, 8, 0);
+            }
         }
     }
 
     void drawDebugInfo(Image& out_image) const {
         if (settings.show_debug_contours) {
             drawDebugContours(out_image);
+
+            cv::Rect enclosing_rect = findEnclosingRect();
+            cv::rectangle(out_image, enclosing_rect.tl(), enclosing_rect.br(),
+                          cv::Scalar(0, 255, 0), 2, 8, 0);
         }
 
         _marker.getSmoothedPosition(out_image.size());
-
-        cv::Rect enclosing_rect = findEnclosingRect();
-        cv::rectangle(out_image, enclosing_rect.tl(), enclosing_rect.br(),
-                      cv::Scalar(0, 255, 0), 2, 8, 0);
 
         cv::Scalar last_pos_color = _marker.hasGrip() ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 0, 0);
 
@@ -555,7 +558,7 @@ private:
 
     Image amplifyMotion(const Image& prev_frame,
                         const Image& curr_frame) {
-        ScopedTimer timer("amplifyMotion: ");
+//        ScopedTimer timer("amplifyMotion: ");
         cv::Size small_size(320, 240);
 
         Image diff = (curr_frame - prev_frame);
@@ -582,7 +585,7 @@ private:
 
         Image blurred;
         {
-            ScopedTimer timer("blur: ");
+//            ScopedTimer timer("blur: ");
             blurred = greyscale.blurred(7);
         }
 
