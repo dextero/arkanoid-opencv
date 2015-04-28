@@ -173,6 +173,7 @@ int main() {
         add_setting_adjuster(key_handlers, settings.blurred_threshold, '3', 'e', (unsigned char)5);
         key_handlers['a'] = [&settings](){ settings.show_background = !settings.show_background; };
         key_handlers['s'] = [&settings](){ settings.show_debug_contours = !settings.show_debug_contours; };
+        key_handlers['d'] = [&settings](){ settings.show_marker_pos = !settings.show_marker_pos; };
         key_handlers['c'] = [](){ Logger::toggle("capture"); };
         key_handlers['z'] = [](){ Logger::toggle("fps"); };
         key_handlers['x'] = [](){ Logger::toggle("threads"); };

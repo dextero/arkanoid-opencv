@@ -280,8 +280,8 @@ public:
 
             _contours = getSignificantContours(preprocessed.toGreyscale());
 
+            cv::Point marker_pos = _marker.getSmoothedPosition(frame.size());
             if (_contours.size()) {
-                cv::Point marker_pos = _marker.getSmoothedPosition(frame.size());
                 detectGrip(marker_pos);
             }
 
@@ -303,10 +303,10 @@ public:
                || calibration_state == CalibrationState::Preparing;
 
 #if 1
-        if (!_curr_frame.empty()) {
+        if (!_curr_frame.empty() && show_bg) {
             ret += _curr_frame.resized(ret.size());
         }
-#else
+#elif 0
         if (!_last_preprocessed.empty()) {
             ret += _last_preprocessed.resized(ret.size());
 
@@ -344,7 +344,8 @@ public:
         BoundedValue<uint8_t, 0, 255> blurred_threshold = 20;
         BoundedValue<int, 0, 1000> min_poly_area = 300;
         bool show_background = true;
-        bool show_debug_contours = true;
+        bool show_debug_contours = false;
+        bool show_marker_pos = false;
 
         void display(Image &image) const {
             Image textImage(image.size(), image.type(), cv::Scalar(0, 0, 0, 255));
@@ -546,14 +547,16 @@ private:
                           cv::Scalar(0, 255, 0), 2, 8, 0);
         }
 
-        _marker.getSmoothedPosition(out_image.size());
+        if (settings.show_marker_pos) {
+            cv::Scalar last_pos_color =
+                _marker.hasGrip() ? cv::Scalar(0, 0, 255)
+                                  : cv::Scalar(255, 0, 0);
 
-        cv::Scalar last_pos_color = _marker.hasGrip() ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 0, 0);
-
-        cv::circle(out_image, _marker.getSmoothedPosition(out_image.size()),
-                   20, cv::Scalar(255, 255, 255), 2, 8, 0 );
-        cv::circle(out_image, _marker.getLastPosition(out_image.size()),
-                   20, last_pos_color, 2, 8, 0 );
+            cv::circle(out_image, _marker.getSmoothedPosition(out_image.size()),
+                       20, cv::Scalar(255, 255, 255), 2, 8, 0);
+            cv::circle(out_image, _marker.getLastPosition(out_image.size()),
+                       20, last_pos_color, 2, 8, 0);
+        }
     }
 
     Image amplifyMotion(const Image& prev_frame,

@@ -134,6 +134,7 @@ public:
 
     void reset()
     {
+        _balls.clear();
         _balls.emplace_back(cv::Point2f(_board_width / 2, _board_height / 2 + 40),
                             cv::Point2f(0.0f, BALL_SPEED),
                             cv::Scalar(255, 255, 255));
@@ -174,9 +175,7 @@ public:
             cv::circle(img, ball.position, BALL_RADIUS, ball.color, -1);
         }
 
-        cv::rectangle(img, _paddle, cv::Scalar(0, 255, 0), -1);
-        cv::rectangle(img, board_rect, cv::Scalar(0, 255, 0));
-
+        cv::rectangle(img, _paddle, cv::Scalar(255, 255, 255), -1);
         img += board_img;// * 0.5;
     };
 
@@ -235,16 +234,7 @@ private:
                 cv::Point2f normal;
                 cv::Rect rect = rectForBlock(x, y);
                 if (ballHitsRect(ball.position, (float)BALL_RADIUS, rect, &normal)) {
-                    const float EPSILON = 0.001f;
-                    if (normal == cv::Point2f(-1.0f, 0.0f)) {
-                        ball.position.x = rect.x - EPSILON;
-                    } else if (normal == cv::Point2f(1.0f, 0.0f)) {
-                        ball.position.x = rect.x + rect.width + EPSILON;
-                    } else if (normal == cv::Point2f(0.0f, -1.0f)) {
-                        ball.position.y = rect.y - EPSILON;
-                    } else if (normal == cv::Point2f(0.0f, 1.0f)) {
-                        ball.position.y = rect.y + rect.height + EPSILON;
-                    }
+                    ball.position += normal * BALL_RADIUS;
                     ball.velocity = reflect(ball.velocity, normal);
                     _blocks[x][y] = 0;
                     if (_balls.size() < 5) {
@@ -277,7 +267,7 @@ private:
     {
         return hsv2rgb((float)x / (float)_blocks.width * 359.0f,
                        1.0f,
-                       (float)y / (float)_blocks.height);
+                       0.5f + 0.5f * (float)y / (float)_blocks.height);
     }
 
     cv::Rect rectForBlock(size_t x, size_t y)
