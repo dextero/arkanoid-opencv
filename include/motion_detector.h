@@ -303,7 +303,7 @@ public:
                || calibration_state == CalibrationState::Preparing;
 
 #if 1
-        if (!_curr_frame.empty() && show_bg) {
+        if (!_curr_frame.empty() && settings.show_debug_frame) {
             ret += _curr_frame.resized(ret.size());
         }
 #elif 0
@@ -323,9 +323,9 @@ public:
         }
 #endif
 
-//        if (show_bg) {
-//            ret += background.resized(ret.size());
-//        }
+        if (!background.empty() && show_bg) {
+            ret += background.resized(ret.size());
+        }
 
         if (calibration_state == CalibrationState::Preparing) {
             Image rect = cv::Mat::zeros(ret.size(), ret.type());
@@ -346,6 +346,7 @@ public:
         bool show_background = true;
         bool show_debug_contours = false;
         bool show_marker_pos = false;
+        bool show_debug_frame = false;
 
         void display(Image &image) const {
             Image textImage(image.size(), image.type(), cv::Scalar(0, 0, 0, 255));
@@ -404,11 +405,11 @@ private:
         float THRESHOLD = 40;
         float GREYSCALE_THRESHOLD = 230;
 
-        return image.clone();
-
         Image ret(image.size(), image.type());
         cv::absdiff(image, _significant_color, ret);
         cv::threshold(ret, ret, THRESHOLD, 255, cv::THRESH_BINARY_INV);
+
+        return ret;
 
         Image mask(image.size(), CV_8UC1);
         cv::threshold(ret.toGreyscale(), mask, GREYSCALE_THRESHOLD, 255, cv::THRESH_BINARY);

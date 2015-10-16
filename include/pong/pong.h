@@ -176,7 +176,7 @@ public:
         }
 
         cv::rectangle(img, _paddle, cv::Scalar(255, 255, 255), -1);
-        img += board_img;// * 0.5;
+        img += board_img;
     };
 
     bool isGameOver() const

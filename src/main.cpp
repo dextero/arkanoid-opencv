@@ -101,9 +101,9 @@ public:
              size_t height)
     {
         MotionDetector detector(width, height);
+        Image background;
 
         while (!force_stop && running) {
-            Image background;
             if (_capture->try_pop(background)) {
                 background.flip(Image::FlipAxis::Y);
                 detector.nextFrame(background);
@@ -174,6 +174,7 @@ int main() {
         key_handlers['a'] = [&settings](){ settings.show_background = !settings.show_background; };
         key_handlers['s'] = [&settings](){ settings.show_debug_contours = !settings.show_debug_contours; };
         key_handlers['d'] = [&settings](){ settings.show_marker_pos = !settings.show_marker_pos; };
+        key_handlers['f'] = [&settings](){ settings.show_debug_frame = !settings.show_debug_frame; };
         key_handlers['c'] = [](){ Logger::toggle("capture"); };
         key_handlers['z'] = [](){ Logger::toggle("fps"); };
         key_handlers['x'] = [](){ Logger::toggle("threads"); };
@@ -213,10 +214,8 @@ int main() {
             }
 
             detector.images->try_pop(background);
-
-            Image frame = background.clone();
-            pong.drawOnto(frame);
-            window.showImage(frame);
+            pong.drawOnto(background);
+            window.showImage(background);
 
             key = (char) cvWaitKey(20);
             auto it = key_handlers.find(key);
