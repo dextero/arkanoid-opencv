@@ -89,8 +89,8 @@ public:
     DetectorThread(size_t width,
                    size_t height,
                    const std::shared_ptr<message_queue<Image>>& capture):
-        _capture(capture),
         running(true),
+        _capture(capture),
         _toggle_calibration(false)
     {
         std::thread actual_thread(&DetectorThread::run, this, width, height);

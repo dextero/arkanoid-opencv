@@ -61,6 +61,9 @@ private:
                       const char* msg,
                       va_list args)
     {
+#ifndef WITH_COLORS
+        (void)color;
+#endif
         char format_buffer[1024];
         char buffer[4096];
 

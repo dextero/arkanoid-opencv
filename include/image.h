@@ -49,7 +49,7 @@ public:
 
     Image &flip(FlipAxis axis)
     {
-        return *this = std::move(flipped(axis));
+        return *this = flipped(axis);
     }
 
     Image absdiff(const Image &other) const
