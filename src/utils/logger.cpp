@@ -29,7 +29,7 @@ public:
     };
 
 #define DEFINE_LOG_LEVEL(Name, Level, Color, Prefix) \
-    virtual void Name(const char* msg, ...) \
+    virtual void Name(const char* msg, ...) override \
     { \
         if (Level >= _level) { \
             va_list list; \
@@ -39,7 +39,7 @@ public:
         } \
     }
 
-    virtual void set_log_level(LogLevel level)
+    virtual void set_log_level(LogLevel level) override
     {
         _level = level;
     }
@@ -48,8 +48,8 @@ public:
     DEFINE_LOG_LEVEL(trace, LogLevel::TRACE, Color::White, "[TRACE] ")
     DEFINE_LOG_LEVEL(debug, LogLevel::DEBUG, Color::Blue, "[DEBUG] ")
     DEFINE_LOG_LEVEL(info, LogLevel::INFO, Color::Green, "[INFO] ")
-    DEFINE_LOG_LEVEL(warn, LogLevel::WARNING, Color::Yellow, "[WARN] ")
-    DEFINE_LOG_LEVEL(err, LogLevel::ERROR, Color::Red, "[ERR] ")
+    DEFINE_LOG_LEVEL(warning, LogLevel::WARNING, Color::Yellow, "[WARN] ")
+    DEFINE_LOG_LEVEL(error, LogLevel::ERROR, Color::Red, "[ERR] ")
 
 private:
     LogLevel _level = LogLevel::TRACE;
