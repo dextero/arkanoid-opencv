@@ -38,10 +38,11 @@ struct Message {
 class CaptureThread: public std::thread
 {
 public:
-    volatile bool running = true;
+    std::atomic<bool> running;
 
     CaptureThread():
-        std::thread()
+        std::thread(),
+        running(true)
     {
         std::thread actual_thread(&CaptureThread::run, this);
         swap(actual_thread);
@@ -83,12 +84,14 @@ public:
 class DetectorThread: public std::thread
 {
 public:
-    volatile bool running = true;
+    std::atomic<bool> running;
 
     DetectorThread(size_t width,
                    size_t height,
                    const std::shared_ptr<message_queue<Image>>& capture):
-        _capture(capture)
+        _capture(capture),
+        running(true),
+        _toggle_calibration(false)
     {
         std::thread actual_thread(&DetectorThread::run, this, width, height);
         swap(actual_thread);
@@ -130,7 +133,7 @@ public:
 
 private:
     std::shared_ptr<message_queue<Image>> _capture;
-    volatile bool _toggle_calibration = false;
+    std::atomic<bool> _toggle_calibration;
 };
 
 template<typename T, T Min, T Max>
