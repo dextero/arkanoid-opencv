@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project(pong)
+project(arkanoid)
 
 find_package(OpenCV REQUIRED)
 find_package(Threads REQUIRED)
@@ -21,5 +21,8 @@ set(SOURCE_FILES
 
 include_directories(include)
 
-add_executable(pong ${SOURCE_FILES} include/utils/message_queue.h include/utils/spin_lock.h include/image.h include/bounded_value.h include/motion_detector.h include/window.h include/percent_point.h include/tetris/board.h include/pong/pong.h include/utils/array_2d.h include/utils/timer.h src/utils/timer.cpp include/utils/misc.h include/utils/rng.h)
-target_link_libraries(pong ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+add_executable(arkanoid ${SOURCE_FILES} include/utils/message_queue.h
+    include/utils/spin_lock.h include/image.h include/bounded_value.h
+    include/motion_detector.h include/window.h include/percent_point.h
+    include/tetris/board.h include/arkanoid/arkanoid.h include/utils/array_2d.h include/utils/timer.h src/utils/timer.cpp include/utils/misc.h include/utils/rng.h)
+target_link_libraries(arkanoid ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT})

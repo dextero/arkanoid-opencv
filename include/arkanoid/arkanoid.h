@@ -2,8 +2,8 @@
 // Created by dex on 26.04.15.
 //
 
-#ifndef PONG_PONG_H
-#define PONG_PONG_H
+#ifndef ARKANOID_ARKANOID_H
+#define ARKANOID_ARKANOID_H
 
 #include <opencv2/core/core.hpp>
 #include <utils/array_2d.h>
@@ -166,7 +166,7 @@ public:
                 }
 
                 cv::Scalar color = colorFromPos(x, y);
-//                Logger::get("pong").info("color = %f %f %f", color[0], color[1], color[2]);
+//                Logger::get("arkanoid").info("color = %f %f %f", color[0], color[1], color[2]);
                 cv::rectangle(board_img, rectForBlock(x, y), color, -1);
             }
         }
@@ -209,11 +209,11 @@ private:
         }
 
         if (ball.position.y < 0.0f) {
-            Logger::get("pong").info("y < 0");
+            Logger::get("arkanoid").info("y < 0");
             ball.velocity = reflect(ball.velocity, { 0.0f, 1.0f });
             ball.position.y = 0.0f;
         } else if (ball.position.y > _board_height) {
-//            Logger::get("pong").info("y > height");
+//            Logger::get("arkanoid").info("y > height");
             if (ball_idx != _balls.size() - 1) {
                 std::swap(_balls[ball_idx], _balls.back());
             }
@@ -288,4 +288,4 @@ private:
     cv::Rect_<float> _paddle;
 };
 
-#endif //PONG_PONG_H
+#endif //ARKANOID_ARKANOID_H

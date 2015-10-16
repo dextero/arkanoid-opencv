@@ -2,8 +2,8 @@
 // Created by dex on 25.04.15.
 //
 
-#ifndef PONG_BOARD_H
-#define PONG_BOARD_H
+#ifndef ARKANOID_BOARD_H
+#define ARKANOID_BOARD_H
 
 #include <vector>
 #include <array>
@@ -434,4 +434,4 @@ private:
 
 }; // namespace tetris
 
-#endif //PONG_BOARD_H
+#endif //ARKANOID_BOARD_H

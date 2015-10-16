@@ -2,8 +2,8 @@
 // Created by dex on 26.04.15.
 //
 
-#ifndef PONG_RNG_H
-#define PONG_RNG_H
+#ifndef ARKANOID_RNG_H
+#define ARKANOID_RNG_H
 
 #include <random>
 
@@ -31,4 +31,4 @@ private:
     Distribution _distribution;
 };
 
-#endif //PONG_RNG_H
+#endif //ARKANOID_RNG_H

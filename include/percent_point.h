@@ -2,8 +2,8 @@
 // Created by dex on 24.03.15.
 //
 
-#ifndef _PONG_PERCENT_POINT_H_
-#define _PONG_PERCENT_POINT_H_
+#ifndef _ARKANOID_PERCENT_POINT_H_
+#define _ARKANOID_PERCENT_POINT_H_
 
 #include <opencv2/opencv.hpp>
 #include <cassert>
@@ -65,4 +65,4 @@ struct PercentPoint: public cv::Point2f {
     }
 };
 
-#endif //_PONG_PERCENT_POINT_H_
+#endif //_ARKANOID_PERCENT_POINT_H_

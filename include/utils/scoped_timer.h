@@ -2,8 +2,8 @@
 // Created by dex on 17.03.15.
 //
 
-#ifndef _PONG_SCOPED_TIMER_H_
-#define _PONG_SCOPED_TIMER_H_
+#ifndef _ARKANOID_SCOPED_TIMER_H_
+#define _ARKANOID_SCOPED_TIMER_H_
 
 #include <functional>
 #include <string>
@@ -29,4 +29,4 @@ private:
     Timer timer;
 };
 
-#endif //_PONG_SCOPED_TIMER_H_
+#endif //_ARKANOID_SCOPED_TIMER_H_

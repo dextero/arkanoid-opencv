@@ -2,8 +2,8 @@
 // Created by dex on 26.04.15.
 //
 
-#ifndef PONG_ARRAY_2D_H
-#define PONG_ARRAY_2D_H
+#ifndef ARKANOID_ARRAY_2D_H
+#define ARKANOID_ARRAY_2D_H
 
 #include <vector>
 #include <stddef.h>
@@ -83,4 +83,4 @@ private:
 };
 
 
-#endif //PONG_ARRAY_2D_H
+#endif //ARKANOID_ARRAY_2D_H

@@ -2,8 +2,8 @@
 // Created by dex on 26.04.15.
 //
 
-#ifndef PONG_TIMER_H
-#define PONG_TIMER_H
+#ifndef ARKANOID_TIMER_H
+#define ARKANOID_TIMER_H
 
 class Timer
 {
@@ -18,4 +18,4 @@ private:
     struct timespec _start_time;
 };
 
-#endif //PONG_TIMER_H
+#endif //ARKANOID_TIMER_H

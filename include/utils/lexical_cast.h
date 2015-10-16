@@ -2,8 +2,8 @@
 // Created by dex on 17.03.15.
 //
 
-#ifndef _PONG_LEXICAL_CAST_H_
-#define _PONG_LEXICAL_CAST_H_
+#ifndef _ARKANOID_LEXICAL_CAST_H_
+#define _ARKANOID_LEXICAL_CAST_H_
 
 #include <string>
 #include <sstream>
@@ -36,4 +36,4 @@ Dst lexical_cast(const Src& src) {
     return LexicalCastHelper<Dst, Src>::cast(src);
 }
 
-#endif //_PONG_LEXICAL_CAST_H_
+#endif //_ARKANOID_LEXICAL_CAST_H_

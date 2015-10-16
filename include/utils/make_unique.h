@@ -2,8 +2,8 @@
 // Created by dex on 21.03.15.
 //
 
-#ifndef _PONG_MAKE_UNIQUE_H_
-#define _PONG_MAKE_UNIQUE_H_
+#ifndef _ARKANOID_MAKE_UNIQUE_H_
+#define _ARKANOID_MAKE_UNIQUE_H_
 
 #include <bits/unique_ptr.h>
 
@@ -16,4 +16,4 @@ std::unique_ptr<T> make_unique(Args&&... args) {
 
 }
 
-#endif //_PONG_MAKE_UNIQUE_H_
+#endif //_ARKANOID_MAKE_UNIQUE_H_

@@ -2,8 +2,8 @@
 // Created by dex on 17.03.15.
 //
 
-#ifndef _PONG_FPS_COUNTER_H_
-#define _PONG_FPS_COUNTER_H_
+#ifndef _ARKANOID_FPS_COUNTER_H_
+#define _ARKANOID_FPS_COUNTER_H_
 
 #include <queue>
 #include <ratio>
@@ -25,4 +25,4 @@ private:
     unsigned long _ns_sum;
 };
 
-#endif //_PONG_FPS_COUNTER_H_
+#endif //_ARKANOID_FPS_COUNTER_H_

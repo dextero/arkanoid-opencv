@@ -2,8 +2,8 @@
 // Created by dex on 21.03.15.
 //
 
-#ifndef _PONG_LOGGER_H_
-#define _PONG_LOGGER_H_
+#ifndef _ARKANOID_LOGGER_H_
+#define _ARKANOID_LOGGER_H_
 
 #include <cstdarg>
 #include <cstdio>
@@ -62,4 +62,4 @@ private:
     static std::mutex _logger_mutex;
 };
 
-#endif //_PONG_LOGGER_H_
+#endif //_ARKANOID_LOGGER_H_

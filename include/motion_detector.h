@@ -2,8 +2,8 @@
 // Created by dex on 24.03.15.
 //
 
-#ifndef _PONG_MOTION_DETECTOR_H_
-#define _PONG_MOTION_DETECTOR_H_
+#ifndef _ARKANOID_MOTION_DETECTOR_H_
+#define _ARKANOID_MOTION_DETECTOR_H_
 
 #include <opencv2/opencv.hpp>
 #include <utils/logger.h>
@@ -601,4 +601,4 @@ private:
     }
 };
 
-#endif //_PONG_MOTION_DETECTOR_H_
+#endif //_ARKANOID_MOTION_DETECTOR_H_

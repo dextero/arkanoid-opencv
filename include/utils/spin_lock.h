@@ -2,8 +2,8 @@
 // Created by dex on 24.03.15.
 //
 
-#ifndef _PONG_SPIN_LOCK_H_
-#define _PONG_SPIN_LOCK_H_
+#ifndef _ARKANOID_SPIN_LOCK_H_
+#define _ARKANOID_SPIN_LOCK_H_
 
 #include <atomic>
 
@@ -26,4 +26,4 @@ private:
     volatile std::atomic<bool> _locked;
 };
 
-#endif //_PONG_SPIN_LOCK_H_
+#endif //_ARKANOID_SPIN_LOCK_H_

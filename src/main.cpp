@@ -8,7 +8,7 @@
 #include <atomic>
 
 #include <signal.h>
-#include <pong/pong.h>
+#include <arkanoid/arkanoid.h>
 #include <utils/timer.h>
 
 #include "motion_detector.h"
@@ -156,7 +156,7 @@ int main() {
         signal(sig, signal_handler);
     }
 
-    Window window("pong");
+    Window window("arkanoid");
     FpsCounter fpsCounter;
 
     const size_t WIDTH = 1440;
@@ -164,7 +164,7 @@ int main() {
 
     CaptureThread capture;
     DetectorThread detector(WIDTH, HEIGHT, capture.images);
-    Game pong(WIDTH, HEIGHT);
+    Game arkanoid(WIDTH, HEIGHT);
 
     try {
         char key = 0;
@@ -202,22 +202,22 @@ int main() {
 
             cv::Point2f marker_pos;
             if (detector.marker_positions->try_pop(marker_pos)) {
-                pong.setPaddlePos((size_t)marker_pos.x);
+                arkanoid.setPaddlePos((size_t)marker_pos.x);
             }
 
             dt += timer.getElapsedSeconds();
             timer.reset();
             while (dt > UPDATE_STEP_S) {
-                pong.update((float)UPDATE_STEP_S);
+                arkanoid.update((float)UPDATE_STEP_S);
                 dt -= UPDATE_STEP_S;
             }
 
-            if (pong.isGameOver() || pong.isGameWon()) {
-                pong.reset();
+            if (arkanoid.isGameOver() || arkanoid.isGameWon()) {
+                arkanoid.reset();
             }
 
             detector.images->try_pop(background);
-            pong.drawOnto(background);
+            arkanoid.drawOnto(background);
             window.showImage(background);
 
             key = (char) cvWaitKey(20);

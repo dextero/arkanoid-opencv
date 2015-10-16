@@ -2,8 +2,8 @@
 // Created by dex on 24.03.15.
 //
 
-#ifndef _PONG_BOUNDED_VALUE_H_
-#define _PONG_BOUNDED_VALUE_H_
+#ifndef _ARKANOID_BOUNDED_VALUE_H_
+#define _ARKANOID_BOUNDED_VALUE_H_
 
 template<typename T, T Min, T Max>
 struct BoundedValue
@@ -37,4 +37,4 @@ struct BoundedValue
     operator T() const { return value; }
 };
 
-#endif //_PONG_BOUNDED_VALUE_H_
+#endif //_ARKANOID_BOUNDED_VALUE_H_

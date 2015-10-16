@@ -2,8 +2,8 @@
 // Created by dex on 24.03.15.
 //
 
-#ifndef _PONG_IMAGE_H_
-#define _PONG_IMAGE_H_
+#ifndef _ARKANOID_IMAGE_H_
+#define _ARKANOID_IMAGE_H_
 
 #include <opencv2/opencv.hpp>
 
@@ -109,4 +109,4 @@ public:
     }
 };
 
-#endif //_PONG_IMAGE_H_
+#endif //_ARKANOID_IMAGE_H_
